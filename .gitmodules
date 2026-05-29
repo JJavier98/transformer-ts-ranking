@@ -1,0 +1,3 @@
+[submodule "s-transformers-lib"]
+	path = s-transformers-lib
+	url = git@github.com:ari-dasci/S-TransformerTS.git
