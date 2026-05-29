@@ -1,0 +1,25 @@
+manifest_kind: m4_datasets
+curation_status: bootstrap
+defaults:
+  relative_root: data/short_term_forecast/m4
+  info_file: M4-info.csv
+  naive2_file: submission-Naive2.csv
+frequencies:
+  Yearly:
+    train_file: Yearly-train.csv
+    test_file: Yearly-test.csv
+  Quarterly:
+    train_file: Quarterly-train.csv
+    test_file: Quarterly-test.csv
+  Monthly:
+    train_file: Monthly-train.csv
+    test_file: Monthly-test.csv
+  Weekly:
+    train_file: Weekly-train.csv
+    test_file: Weekly-test.csv
+  Daily:
+    train_file: Daily-train.csv
+    test_file: Daily-test.csv
+  Hourly:
+    train_file: Hourly-train.csv
+    test_file: Hourly-test.csv

@@ -1,0 +1,108 @@
+manifest_kind: long_term_datasets
+curation_status: bootstrap
+defaults:
+  date_column: date
+  target_columns:
+  - OT
+  feature_mode: multivariate
+  scaler: standard
+  split_strategy: ratio
+  split:
+    train_ratio: 0.7
+    val_ratio: 0.1
+  seq_len: 96
+  label_len: 48
+  stride: 1
+datasets:
+  electricity:
+    relative_path: data/long_term_forecast/electricity/electricity.csv
+    frequency: h
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+  exchange_rate:
+    relative_path: data/long_term_forecast/exchange_rate/exchange_rate.csv
+    frequency: d
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+  illness:
+    relative_path: data/long_term_forecast/illness/national_illness.csv
+    frequency: w
+    horizons:
+    - 24
+    - 36
+    - 48
+    - 60
+  traffic:
+    relative_path: data/long_term_forecast/traffic/traffic.csv
+    frequency: h
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+  weather:
+    relative_path: data/long_term_forecast/weather/weather.csv
+    frequency: t
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+  ETTh1:
+    relative_path: data/long_term_forecast/ETT-small/ETTh1.csv
+    frequency: h
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+    split_strategy: fixed_counts
+    split:
+      train: 8640
+      val: 2880
+      test: 2880
+  ETTh2:
+    relative_path: data/long_term_forecast/ETT-small/ETTh2.csv
+    frequency: h
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+    split_strategy: fixed_counts
+    split:
+      train: 8640
+      val: 2880
+      test: 2880
+  ETTm1:
+    relative_path: data/long_term_forecast/ETT-small/ETTm1.csv
+    frequency: t
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+    split_strategy: fixed_counts
+    split:
+      train: 34560
+      val: 11520
+      test: 11520
+  ETTm2:
+    relative_path: data/long_term_forecast/ETT-small/ETTm2.csv
+    frequency: t
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+    split_strategy: fixed_counts
+    split:
+      train: 34560
+      val: 11520
+      test: 11520

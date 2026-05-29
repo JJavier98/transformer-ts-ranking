@@ -1,0 +1,601 @@
+generated_at: '2026-05-29T07:47:31.199656+00:00'
+summary:
+  total_models: 29
+  filesystem_models: 29
+  registered_models: 29
+  filesystem_only: 0
+  registry_only: 0
+  inspection_failures: 0
+  eligible_long_term: 28
+  eligible_m4: 28
+models:
+- model_name: airformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
+    the encoder-only profile.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Runtime probe confirmed AirFormer executes as an encoder-only
+    forecaster on both regular multivariate long-term data and univariate M4-style
+    inputs without a required external spatial graph.
+- model_name: autoformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: basisformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: card
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: cats
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: chronos2
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: Chronos2 does not require exogenous covariates by default; bootstrap
+    exclusion removed.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Chronos2Config defaults n_future_covariates=0 and Chronos2.forward()
+    accepts x_enc with optional time marks and optional future covariates, so the
+    model should enter both benchmark tracks by default.
+- model_name: contiformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
+    the encoder-only profile.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Runtime probe confirmed ContiFormer can execute on both benchmark
+    tracks using its regular-time fallback, so it should be included in the automated
+    rankings.
+- model_name: crossformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: deformable_tst
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: earthformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
+    Earthformer configured in 1d mode.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Runtime probe confirmed Earthformer runs in documented 1d mode
+    for both long-term and M4-style series, so it should not be excluded as spatial-only.
+- model_name: etsformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: fedformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: informer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: itransformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: lag_llama
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: multipatchformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: nonstationary_transformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: patchtst
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: pathformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: pyraformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: quatformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: reformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: scaleformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: spacetimeformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
+    the seq2seq profile.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Runtime probe confirmed Spacetimeformer executes on both benchmark
+    tracks with its standard seq2seq interface, so it should not be excluded as requiring
+    external spatial structure.
+- model_name: tft
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
+    the seq2seq profile.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Runtime probe confirmed TFT works on both benchmark tracks with
+    time marks but without mandatory external exogenous covariates, so the bootstrap
+    exclusion was too strict.
+- model_name: timexer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: exogenous_aware
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
+    the time-marked encoder profile.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Runtime probe confirmed TimeXer executes on both benchmark tracks
+    with time-mark inputs and does not require separate exogenous covariates to participate
+    in the automated rankings.
+- model_name: tpatchgnn
+  registered: true
+  supports_regular_mts: false
+  supports_univariate: false
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: true
+  requires_spatial_structure: false
+  eligible_long_term: false
+  eligible_m4: false
+  adapter_name: irregular
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - 'Manual override: runtime compatibility probe kept tPatchGNN excluded because
+    the regular benchmark tasks do not provide its required irregular patched input
+    format.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Runtime probe confirmed tPatchGNN expects irregular patched
+    inputs with explicit observation times and masks, so it remains outside the regular
+    long-term and M4 automated rankings.
+- model_name: transformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: true
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: seq2seq
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+- model_name: triformer
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: null
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  review_status: bootstrap
+  eligibility_source: bootstrap_heuristic
+  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+manifest_kind: model_capability_matrix
+curation_status: bootstrap
+review_required: true
+eligibility_policy:
+  eligible_long_term: Controls whether a model enters the automated long-term leaderboard.
+  eligible_m4: Controls whether a model enters the automated M4 leaderboard.
+  both_false_behavior: If both flags are false, the model is excluded from the main
+    automated rankings and should appear in the coverage table until it is reviewed
+    or adapted.
+  source_precedence:
+  - manual_override
+  - bootstrap_heuristic

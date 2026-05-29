@@ -1,0 +1,37 @@
+manifest_kind: training_presets
+curation_status: bootstrap
+presets:
+  smoke:
+    seeds:
+    - 42
+    max_models: 3
+    max_horizons_per_dataset: 1
+    representative_models:
+    - patchtst
+    - basisformer
+    - fedformer
+    batch_size: 16
+    max_epochs: 1
+    dry_run: true
+  standard:
+    seeds:
+    - 42
+    - 123
+    - 2026
+    max_models: null
+    max_horizons_per_dataset: null
+    batch_size: 32
+    max_epochs: 20
+    early_stopping_patience: 5
+    dry_run: false
+  paper_ready:
+    seeds:
+    - 42
+    - 123
+    - 2026
+    max_models: null
+    max_horizons_per_dataset: null
+    batch_size: 32
+    max_epochs: 50
+    early_stopping_patience: 10
+    dry_run: false
