@@ -12,7 +12,10 @@ from pathlib import Path
 
 from .bootstrap import materialize_bootstrap_manifests
 from .discovery.model_audit import audit_model_library, write_audit_artifacts
-from .discovery.runtime_compatibility import probe_model_compatibility
+from .discovery import (
+    probe_model_compatibility,
+    validate_canonical_forward_pass,
+)
 from .evaluation.smoke import run_long_term_smoke, run_m4_smoke
 
 
@@ -171,6 +174,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target JSON path for the compatibility report.",
     )
 
+    forward_parser = subparsers.add_parser(
+        "validate-canonical-forward",
+        help="Validate canonical predict() forward passes for long-term and M4 tasks.",
+    )
+    forward_parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=_default_repo_root(),
+        help="Repository root for transformer-ts-ranking.",
+    )
+    forward_parser.add_argument(
+        "--models",
+        default=None,
+        help="Comma-separated list of model names. Defaults to all registered models.",
+    )
+    forward_parser.add_argument(
+        "--output-path",
+        type=Path,
+        default=None,
+        help="Target JSON path for the canonical forward validation report.",
+    )
+
     return parser
 
 
@@ -314,6 +339,27 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Both compatible: {payload['summary']['both_compatible']}")
         if "both_fit_ok" in payload["summary"]:
             print(f"Both fit() ok: {payload['summary']['both_fit_ok']}")
+        print(f"Artifact: {artifact_path}")
+        return 0
+
+    if args.command == "validate-canonical-forward":
+        output_path = (
+            args.output_path.resolve()
+            if args.output_path is not None
+            else repo_root / "artifacts" / "review" / "canonical_forward_validation.json"
+        )
+        models = None
+        if args.models:
+            models = [model_name.strip() for model_name in args.models.split(",") if model_name.strip()]
+        payload, artifact_path = validate_canonical_forward_pass(
+            repo_root=repo_root,
+            output_path=output_path,
+            models=models,
+        )
+        print(f"Validated models: {payload['summary']['total_models']}")
+        print(f"Long-term forward ok: {payload['summary']['long_term_forward_ok']}")
+        print(f"M4 forward ok: {payload['summary']['m4_forward_ok']}")
+        print(f"Both forward ok: {payload['summary']['both_forward_ok']}")
         print(f"Artifact: {artifact_path}")
         return 0
 

@@ -19,6 +19,6 @@ def test_run_m4_smoke_writes_plan_artifact(tmp_path: Path) -> None:
     assert payload["dataset"]["frequency_label"] == "Hourly"
     assert payload["dataset"]["horizon"] == 48
     assert payload["selected_models"]
-    assert payload["selected_adapters"]
+    assert payload["selected_models_metadata"]
     assert payload["naive2_reference"]["mean_owa"] == 1.0
     assert artifact_path.exists()

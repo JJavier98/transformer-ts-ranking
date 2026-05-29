@@ -19,8 +19,8 @@ def test_run_long_term_smoke_writes_plan_artifact(tmp_path: Path) -> None:
 
     assert payload["dataset"]["dataset_name"] == "ETTh1"
     assert payload["selected_models"]
-    assert payload["selected_adapters"]
-    assert len(payload["selected_adapters"]) == len(payload["selected_models"])
+    assert payload["selected_models_metadata"]
+    assert len(payload["selected_models_metadata"]) == len(payload["selected_models"])
     assert payload["dataset"]["selected_horizons"] == [96]
     assert payload["windows"]["96"]["train"]["window_count"] > 0
     assert artifact_path.exists()

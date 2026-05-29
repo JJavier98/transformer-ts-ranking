@@ -1,8 +1,8 @@
 """Smoke runners for validating benchmark manifests and data plumbing.
 
 These runners validate the pre-training stages of the benchmark: manifests,
-dataset loading, adapter resolution and metric wiring. They intentionally stop
-short of exhaustive training so the repository can be checked quickly.
+dataset loading and metric wiring. They intentionally stop short of exhaustive
+training so the repository can be checked quickly.
 """
 
 from __future__ import annotations
@@ -10,10 +10,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from ..adapters import iter_task_model_bindings, resolve_model_adapter
-from ..adapters.base import TaskName
 from ..bootstrap import materialize_bootstrap_manifests
 from ..configuration import load_yaml, write_json
 from ..data.long_term import build_window_summary, load_long_term_dataset
@@ -21,6 +19,8 @@ from ..data.m4 import load_m4_dataset
 from .m4_metrics import evaluate_m4_dataset
 
 __all__ = ["run_long_term_smoke", "run_m4_smoke"]
+
+TaskName = Literal["long_term", "m4"]
 
 
 def _ensure_manifests(repo_root: Path, config_dir: Path) -> dict[str, Path]:
@@ -89,33 +89,21 @@ def _select_smoke_models(
     """
     preset = preset_payload["presets"]["smoke"]
     preferred_models = list(preset.get("representative_models", []))
-    eligible_models = {
-        binding.model_name: binding
-        for binding in iter_task_model_bindings(
-            task_name=task_name,
-            capability_payload=capability_payload,
-        )
-    }
+    task_flag = "eligible_long_term" if task_name == "long_term" else "eligible_m4"
+    eligible_entries = [
+        entry
+        for entry in capability_payload.get("models", [])
+        if bool(entry.get(task_flag, False))
+    ]
+    eligible_models = [entry["model_name"] for entry in eligible_entries]
+    eligible_index = {entry["model_name"]: entry for entry in eligible_entries}
 
     selected_models: list[str] = []
     for model_name in preferred_models:
-        if model_name in eligible_models:
+        if model_name in eligible_index:
             selected_models.append(model_name)
     if len(selected_models) >= int(preset["max_models"]):
         return selected_models[: int(preset["max_models"])]
-
-    seen_adapters = {eligible_models[model_name].adapter_name for model_name in selected_models}
-    for model_name, binding in eligible_models.items():
-        if model_name in selected_models:
-            continue
-        adapter_name = binding.adapter_name
-        if adapter_name not in seen_adapters:
-            # Adapter diversity matters more than model count in smoke mode because
-            # it exercises different batch contracts with minimal runtime cost.
-            selected_models.append(model_name)
-            seen_adapters.add(adapter_name)
-        if len(selected_models) >= int(preset["max_models"]):
-            return selected_models
 
     for model_name in eligible_models:
         if model_name not in selected_models:
@@ -172,13 +160,10 @@ def run_long_term_smoke(
         preset_payload=preset_payload,
         task_name="long_term",
     )
-    selected_adapters = [
-        resolve_model_adapter(
-            model_name=model_name,
-            capability_payload=capability_payload,
-        )
-        for model_name in selected_models
-    ]
+    capability_by_model = {
+        entry["model_name"]: entry
+        for entry in capability_payload.get("models", [])
+    }
     preset = preset_payload["presets"][preset_name]
     selected_horizons = dataset.horizons[: int(preset["max_horizons_per_dataset"])]
 
@@ -187,16 +172,14 @@ def run_long_term_smoke(
         "preset_name": preset_name,
         "runtime": runtime_status,
         "selected_models": selected_models,
-        "selected_adapters": [
+        "selected_models_metadata": [
             {
-                "model_name": binding.model_name,
-                "adapter_name": binding.adapter_name,
-                "description": binding.contract.description,
-                "predict_batch_keys": list(binding.contract.for_task("long_term").predict_batch_keys),
-                "optional_batch_keys": list(binding.contract.for_task("long_term").optional_batch_keys),
-                "review_status": binding.review_status,
+                "model_name": model_name,
+                "review_status": capability_by_model[model_name].get("review_status"),
+                "eligibility_source": capability_by_model[model_name].get("eligibility_source"),
+                "eligibility_reason": capability_by_model[model_name].get("eligibility_reason"),
             }
-            for binding in selected_adapters
+            for model_name in selected_models
         ],
         "dataset": {
             "dataset_name": dataset.dataset_name,
@@ -274,13 +257,10 @@ def run_m4_smoke(
         preset_payload=preset_payload,
         task_name="m4",
     )
-    selected_adapters = [
-        resolve_model_adapter(
-            model_name=model_name,
-            capability_payload=capability_payload,
-        )
-        for model_name in selected_models
-    ]
+    capability_by_model = {
+        entry["model_name"]: entry
+        for entry in capability_payload.get("models", [])
+    }
 
     # Evaluating Naive2 through the same metric path proves the M4 loader and
     # metric implementation are aligned before real model forecasts are added.
@@ -296,16 +276,14 @@ def run_m4_smoke(
         "preset_name": preset_name,
         "runtime": runtime_status,
         "selected_models": selected_models,
-        "selected_adapters": [
+        "selected_models_metadata": [
             {
-                "model_name": binding.model_name,
-                "adapter_name": binding.adapter_name,
-                "description": binding.contract.description,
-                "predict_batch_keys": list(binding.contract.for_task("m4").predict_batch_keys),
-                "optional_batch_keys": list(binding.contract.for_task("m4").optional_batch_keys),
-                "review_status": binding.review_status,
+                "model_name": model_name,
+                "review_status": capability_by_model[model_name].get("review_status"),
+                "eligibility_source": capability_by_model[model_name].get("eligibility_source"),
+                "eligibility_reason": capability_by_model[model_name].get("eligibility_reason"),
             }
-            for binding in selected_adapters
+            for model_name in selected_models
         ],
         "dataset": {
             "frequency_label": dataset.frequency_label,
