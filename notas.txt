@@ -1,0 +1,2 @@
+SOTA: Transformers para TS --> https://gemini.google.com/share/1c7bc137de3d
+Review of SOTA --> https://link.springer.com/article/10.1007/s10462-024-11044-2
