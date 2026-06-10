@@ -241,6 +241,8 @@ ranking_plan.md
 # Weights & Biases local run artefacts
 wandb/
 .wandb/
+# But keep the Hydra W&B config presets
+!configs/hydra/wandb/
 
 # Hydra multi-run outputs (generated, not source)
 outputs/

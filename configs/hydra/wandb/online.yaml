@@ -1,0 +1,12 @@
+# W&B online mode: metrics are uploaded in real time.
+enabled: true
+project: transformer-ts-ranking
+# entity: null means wandb uses the entity tied to WANDB_API_KEY.
+entity: null
+mode: online
+# Log model weights (checkpoint) at the end of each run.
+log_model: false
+# Tags applied to every run in this experiment.
+tags: [benchmark, transformer, time-series]
+# Group runs by (model_name, dataset_name) for easy comparison in the W&B UI.
+group_by: model_dataset

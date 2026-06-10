@@ -1,0 +1,8 @@
+# Disable W&B entirely — useful for quick local runs and CI.
+enabled: false
+project: transformer-ts-ranking
+entity: null
+mode: disabled
+log_model: false
+tags: []
+group_by: model_dataset

@@ -1,0 +1,9 @@
+# W&B offline mode: metrics are stored locally in wandb/ and can be synced later
+# with `wandb sync wandb/<run-dir>`.
+enabled: true
+project: transformer-ts-ranking
+entity: null
+mode: offline
+log_model: false
+tags: [benchmark, transformer, time-series]
+group_by: model_dataset
