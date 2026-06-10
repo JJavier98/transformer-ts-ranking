@@ -1,0 +1,6 @@
+# Long-term forecasting track only.
+# Overrides the tasks/datasets/horizons fields from the training preset.
+tasks: [long_term]
+datasets: null   # all 9 configured datasets
+horizons: null   # all 4 configured horizons per dataset
+models: null     # all eligible models from the capability matrix

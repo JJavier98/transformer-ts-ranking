@@ -1,0 +1,25 @@
+# Top-level Hydra config for the transformer-ts-ranking benchmark.
+# Compose sub-configs via the defaults list; override any field on the CLI.
+#
+# Example overrides:
+#   python scripts/launch_benchmark.py training=smoke experiment=long_term wandb=disabled
+#   python scripts/launch_benchmark.py training.epochs=50 experiment.models=[itransformer,patchtst]
+
+defaults:
+  - training: standard
+  - experiment: long_term
+  - wandb: online
+  - _self_
+
+# Hydra output directory (per-run timestamped folder).
+hydra:
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  job:
+    chdir: true  # chdir to repo root so relative paths work
+
+# Repository root is resolved at runtime by the launch script.
+# Do NOT set this here; it is injected programmatically.

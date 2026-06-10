@@ -1,0 +1,6 @@
+# Smoke experiment: minimal subset for pipeline validation.
+# Use with training=smoke and wandb=disabled for a fast end-to-end check.
+tasks: [long_term]
+datasets: [ETTh1]
+horizons: [96]
+models: [itransformer, patchtst, autoformer]

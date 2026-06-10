@@ -1,0 +1,10 @@
+# Smoke preset: 1 epoch, single seed, CPU — for pipeline validation only.
+# Pair with experiment=smoke for a minimal end-to-end check.
+epochs: 1
+batch_size: 16
+patience: 2
+lr: 1.0e-4
+seeds: [42]
+device: cpu
+m4_seq_len: 96
+dry_run: false

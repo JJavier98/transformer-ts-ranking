@@ -1,0 +1,5 @@
+# M4 short-term forecasting track only.
+tasks: [m4]
+datasets: null   # all 6 M4 frequency slices
+horizons: null   # horizon is fixed per frequency
+models: null
