@@ -196,6 +196,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target JSON path for the canonical forward validation report.",
     )
 
+    # ---- run-benchmark subcommand -------------------------------------------
+    bench_parser = subparsers.add_parser(
+        "run-benchmark",
+        help="Train and evaluate all eligible models across datasets and horizons.",
+    )
+    bench_parser.add_argument("--repo-root", type=Path, default=_default_repo_root())
+    bench_parser.add_argument("--device", default="cpu", help="Torch device (cpu or cuda).")
+    bench_parser.add_argument("--epochs", type=int, default=20)
+    bench_parser.add_argument("--batch-size", type=int, default=32)
+    bench_parser.add_argument("--patience", type=int, default=5)
+    bench_parser.add_argument("--lr", type=float, default=1e-4)
+    bench_parser.add_argument("--seeds", default="42,123,2026",
+                              help="Comma-separated seeds.")
+    bench_parser.add_argument("--models", default=None,
+                              help="Comma-separated model subset.")
+    bench_parser.add_argument("--datasets", default=None,
+                              help="Comma-separated dataset/frequency subset.")
+    bench_parser.add_argument("--horizons", default=None,
+                              help="Comma-separated horizon subset.")
+    bench_parser.add_argument("--tasks", default="long_term,m4",
+                              help="Comma-separated tasks (long_term and/or m4).")
+    bench_parser.add_argument("--dry-run", action="store_true",
+                              help="Skip actual training (pipeline validation only).")
+    bench_parser.add_argument("--m4-seq-len", type=int, default=96,
+                              help="Encoder input length for M4 series.")
+
+    # ---- generate-report subcommand -----------------------------------------
+    report_parser = subparsers.add_parser(
+        "generate-report",
+        help="Generate all paper figures, tables, and statistical tests from persisted results.",
+    )
+    report_parser.add_argument("--repo-root", type=Path, default=_default_repo_root())
+
     return parser
 
 
@@ -361,6 +394,52 @@ def main(argv: list[str] | None = None) -> int:
         print(f"M4 forward ok: {payload['summary']['m4_forward_ok']}")
         print(f"Both forward ok: {payload['summary']['both_forward_ok']}")
         print(f"Artifact: {artifact_path}")
+        return 0
+
+    if args.command == "run-benchmark":
+        from .benchmark.runner import BenchmarkRunner, BenchmarkRunnerConfig
+
+        seeds = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
+        models = [m.strip() for m in args.models.split(",") if m.strip()] if args.models else None
+        datasets = [d.strip() for d in args.datasets.split(",") if d.strip()] if args.datasets else None
+        horizons = [int(h.strip()) for h in args.horizons.split(",") if h.strip()] if args.horizons else None
+        tasks = [t.strip() for t in args.tasks.split(",") if t.strip()]
+
+        cfg = BenchmarkRunnerConfig(
+            repo_root=repo_root,
+            device=args.device,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            patience=args.patience,
+            lr=args.lr,
+            seeds=seeds,
+            models=models,
+            datasets=datasets,
+            horizons=horizons,
+            tasks=tasks,
+            dry_run=args.dry_run,
+            m4_seq_len=args.m4_seq_len,
+        )
+        runner = BenchmarkRunner(cfg)
+        frame = runner.run()
+        if not frame.empty:
+            print(f"Benchmark complete. {len(frame)} runs recorded.")
+            print(f"Results: {cfg.results_dir / 'results_raw.parquet'}")
+        else:
+            print("No results produced (dry-run or empty eligibility list).")
+        return 0
+
+    if args.command == "generate-report":
+        from .reporting.runner import ReportRunner, ReportRunnerConfig
+
+        cfg = ReportRunnerConfig(repo_root=repo_root)
+        runner = ReportRunner(cfg)
+        summary = runner.run()
+        for key, val in summary.items():
+            if isinstance(val, list):
+                print(f"{key}: {len(val)} files")
+            else:
+                print(f"{key}: {val}")
         return 0
 
     parser.error(f"Unsupported command: {args.command}")
