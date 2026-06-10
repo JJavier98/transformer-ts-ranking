@@ -221,3 +221,46 @@ __marimo__/
 artifacts/
 data/
 ranking_plan.md
+
+# ---------------------------------------------------------------------------
+# Project-specific
+# ---------------------------------------------------------------------------
+
+# Environment / secrets — never commit API keys
+.env
+.envrc
+!.env.example
+
+# UV virtual environment and lock (lock IS committed for reproducibility)
+.venv/
+# uv.lock is intentionally NOT ignored so environments are reproducible.
+
+# Python version pin (committed)
+# .python-version is intentionally NOT ignored.
+
+# Weights & Biases local run artefacts
+wandb/
+.wandb/
+
+# Hydra multi-run outputs (generated, not source)
+outputs/
+multirun/
+
+# Results and paper outputs (generated from benchmark runs)
+results/
+paper/
+
+# Temporary benchmark test script
+scripts/test_run.py
+
+# Claude Code local settings (permissions, personal overrides)
+.claude/settings.local.json
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
