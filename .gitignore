@@ -252,6 +252,7 @@ multirun/
 # Results and paper outputs (generated from benchmark runs)
 results/
 paper/
+logs/
 
 # Temporary benchmark test script
 scripts/test_run.py

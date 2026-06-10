@@ -1,6 +1,6 @@
-# Paper-ready preset: 50 epochs, 3 seeds, CUDA.
+# Paper-ready preset: 30 epochs, patience=10, 3 seeds, CUDA.
 # Pair with experiment=full for the final publication benchmark run.
-epochs: 100
+epochs: 30
 batch_size: 32
 patience: 10
 lr: 1.0e-4

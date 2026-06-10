@@ -74,8 +74,15 @@ def main(cfg: DictConfig) -> None:
     training = cfg.training
     experiment = cfg.experiment
 
+    # Optional results_dir override — use for parallel runs on separate GPUs
+    # to avoid write contention on the shared parquet file.
+    # Pass as: +results_dir=results/raw/long_term
+    results_dir = cfg.get("results_dir", None)
+    results_dir_path = (_REPO_ROOT / results_dir) if results_dir else None
+
     runner_cfg = BenchmarkRunnerConfig(
         repo_root=_REPO_ROOT,
+        results_dir=results_dir_path,
         # All training hyperparameters come from the training config group.
         device=str(training.get("device", "cpu")),
         epochs=int(training.get("epochs", 20)),
