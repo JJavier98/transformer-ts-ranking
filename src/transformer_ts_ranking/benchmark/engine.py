@@ -505,7 +505,8 @@ class BenchmarkEngine:
         logger = wandb_logger or WandbLogger.disabled()
         self._set_seed(seed)
 
-        m4_ds = M4SeriesDataset(dataset, seq_len=seq_len)
+        label_len = _extract_label_len(model_config)
+        m4_ds = M4SeriesDataset(dataset, seq_len=seq_len, label_len=label_len)
         m4_loader = DataLoader(
             m4_ds,
             batch_size=self.batch_size,
@@ -522,6 +523,7 @@ class BenchmarkEngine:
                 dataset=dataset,
                 m4_loader=m4_loader,
                 seq_len=seq_len,
+                label_len=label_len,
                 seed=seed,
                 logger=logger,
             )
@@ -548,6 +550,7 @@ class BenchmarkEngine:
         dataset: Any,
         m4_loader: DataLoader,
         seq_len: int,
+        label_len: int,
         seed: int,
         logger: WandbLogger,
     ) -> RunResult:
@@ -613,16 +616,17 @@ class BenchmarkEngine:
 
         with torch.no_grad():
             for batch in DataLoader(
-                M4SeriesDataset(dataset, seq_len=seq_len),  # type: ignore[arg-type]
+                M4SeriesDataset(dataset, seq_len=seq_len, label_len=label_len),  # type: ignore[arg-type]
                 batch_size=self.batch_size,
                 shuffle=False,
                 collate_fn=_m4_collate_fn,
             ):
                 x = batch["x"].to(self.device).float()
                 x_mark = batch["x_mark"].to(self.device).float()
+                y_mark = batch["y_mark"].to(self.device).float()
                 series_ids = batch["_series_id"]  # list of strings
 
-                forecast_input = ForecastInput(x=x, x_mark=x_mark)
+                forecast_input = ForecastInput(x=x, x_mark=x_mark, y_mark=y_mark)
                 t0 = time.perf_counter()
                 output = model.predict(forecast_input, device=self.device)
                 latencies.append((time.perf_counter() - t0) * 1000 / x.shape[0])
@@ -738,9 +742,18 @@ class _FilteredM4Loader:
         return len(self._loader)
 
 
+def _extract_label_len(model_config: Any) -> int:
+    """Extract label_len from a config dataclass or dict, defaulting to 0."""
+    if hasattr(model_config, "label_len"):
+        return int(model_config.label_len)
+    if isinstance(model_config, dict):
+        return int(model_config.get("label_len", 0))
+    return 0
+
+
 def _m4_collate_fn(batch: list[dict]) -> dict[str, Any]:
     """Custom collate for M4: stack tensors, keep metadata as lists."""
-    tensor_keys = {"x", "y", "x_mark", "y_mark"}
+    tensor_keys = {"x", "y", "x_mark", "y_full", "y_mark"}
     result: dict[str, Any] = {}
     for key in tensor_keys:
         if key in batch[0]:

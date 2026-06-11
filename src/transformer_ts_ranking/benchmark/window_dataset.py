@@ -123,20 +123,35 @@ class M4SeriesDataset(Dataset):
     last ``seq_len`` values of the training history (zero-padded on the
     left when the series is shorter than ``seq_len``).  The target ``y``
     is the test values (the official ``horizon`` future steps).
+
+    ``y_full`` mirrors the long-term dataset contract: it is the decoder
+    context window ``(label_len + horizon, 1)`` where the first
+    ``label_len`` rows are the last observed training values (scaled) and
+    the remaining ``horizon`` rows are zeros.  Seq2seq models read this
+    for teacher-forcing; encoder-only models ignore it.
+
+    ``y_mark`` is always ``(label_len + horizon, 4)`` zero-filled so
+    that seq2seq decoders receive a time-feature tensor with the correct
+    sequence length even when real calendar features are unavailable.
     """
 
     def __init__(
         self,
         dataset: "LoadedM4Dataset",
         seq_len: int = 96,
+        label_len: int = 0,
     ) -> None:
         """Initialise for one M4 frequency slice.
 
         Args:
             dataset: Loaded M4 dataset for one frequency.
             seq_len: Fixed encoder input length (shorter series are left-padded).
+            label_len: Decoder historical-context length for seq2seq models.
+                Determines the leading rows of ``y_full`` and the total length
+                of ``y_mark``.  Pass ``0`` for encoder-only models.
         """
         self.seq_len = seq_len
+        self.label_len = label_len
         self.horizon = dataset.horizon
         self.series_ids = dataset.series_ids
         self.series = dataset.series
@@ -153,8 +168,8 @@ class M4SeriesDataset(Dataset):
 
         Returns:
             Dict with ``x`` (padded encoder input), ``y`` (test target),
-            ``x_orig`` (original scale encoder), ``series_id`` encoded as
-            a single string stored in ``series_ids`` list (not a tensor).
+            ``y_full`` (decoder context window), ``y_mark`` (decoder time
+            features, all zeros), and metadata for metric computation.
         """
         series_id = self.series_ids[idx]
         series = self.series[series_id]
@@ -184,11 +199,24 @@ class M4SeriesDataset(Dataset):
             pad = np.zeros((self.seq_len - len(scaled_train), 1), dtype=np.float32)
             x_window = np.concatenate([pad, scaled_train], axis=0)
 
+        # Decoder context: last label_len observed values + horizon zeros.
+        # x_window already ends at the last training observation, so its
+        # tail provides the historical decoder context without extra indexing.
+        if self.label_len > 0:
+            dec_hist = x_window[-self.label_len:]          # (label_len, 1)
+            dec_zeros = np.zeros((self.horizon, 1), dtype=np.float32)
+            y_full = np.concatenate([dec_hist, dec_zeros], axis=0)  # (L+H, 1)
+        else:
+            y_full = np.zeros((self.horizon, 1), dtype=np.float32)
+
+        dec_len = self.label_len + self.horizon
+
         return {
             "x": torch.as_tensor(x_window, dtype=torch.float32),
             "y": torch.as_tensor(scaled_test, dtype=torch.float32),
             "x_mark": torch.zeros(self.seq_len, 4, dtype=torch.float32),
-            "y_mark": torch.zeros(self.horizon, 4, dtype=torch.float32),
+            "y_full": torch.as_tensor(y_full, dtype=torch.float32),
+            "y_mark": torch.zeros(dec_len, 4, dtype=torch.float32),
             # Stored as numpy arrays (not tensors) for metric computation
             "train_orig": train_vals,
             "test_orig": test_vals,
