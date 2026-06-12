@@ -7,7 +7,7 @@
 #   sbatch scripts/sbatch/run_long_term_heavy.sh
 
 #SBATCH --job-name lt-heavy
-#SBATCH --partition dgx2
+#SBATCH --partition dgx2,dgx
 #SBATCH --gres=gpu:1
 #SBATCH --array=0-1%2
 #SBATCH -o /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/long_term_heavy_%A_%a.out

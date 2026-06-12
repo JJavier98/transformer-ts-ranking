@@ -10,7 +10,7 @@
 # use run_long_term_heavy.sh with the dgx2 partition.
 
 #SBATCH --job-name lt-bench
-#SBATCH --partition dgx
+#SBATCH --partition dgx2,dgx
 #SBATCH --gres=gpu:1
 #SBATCH --array=0-6%4
 #SBATCH -o /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/long_term_%A_%a.out

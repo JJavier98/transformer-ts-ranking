@@ -7,7 +7,7 @@
 #   sbatch scripts/sbatch/run_m4.sh
 
 #SBATCH --job-name m4-bench
-#SBATCH --partition dgx
+#SBATCH --partition dgx2,dgx
 #SBATCH --gres=gpu:1
 #SBATCH --array=0-5%4
 #SBATCH -o /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/m4_%A_%a.out
