@@ -116,8 +116,37 @@ _IRREGULAR = AdapterContract(
 )
 
 
+_PRETRAINED_ZEROSHOT = AdapterContract(
+    family_name="pretrained_zeroshot",
+    description=(
+        "Zero-shot pretrained foundation models (e.g. Chronos-Bolt, Lag-Llama). "
+        "fit() is a no-op; all computation happens inside predict(). "
+        "The engine injects the dataset scaler via _benchmark_scaler so the "
+        "normalisation round-trip is handled inside the model wrapper."
+    ),
+    task_contracts={
+        "long_term": AdapterTaskContract(
+            task_name="long_term",
+            train_batch_keys=("x",),
+            eval_batch_keys=("x", "y"),
+            predict_batch_keys=("x",),
+            optional_batch_keys=("x_mark", "y_mark"),
+            notes="fit() is a no-op for zero-shot models; only predict() is exercised.",
+        ),
+        "m4": AdapterTaskContract(
+            task_name="m4",
+            train_batch_keys=("x",),
+            eval_batch_keys=("x", "y"),
+            predict_batch_keys=("x",),
+            optional_batch_keys=("x_mark", "y_mark"),
+            notes="fit() is a no-op for zero-shot models; only predict() is exercised.",
+        ),
+    },
+)
+
 ADAPTER_CONTRACTS = {
     "encoder_only": _ENCODER_ONLY,
+    "pretrained_zeroshot": _PRETRAINED_ZEROSHOT,
     "seq2seq": _SEQ2SEQ,
     "exogenous_aware": _EXOGENOUS_AWARE,
     "spatial": _SPATIAL,

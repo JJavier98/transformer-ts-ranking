@@ -76,6 +76,9 @@ class RunResult:
     stopped_early: bool = False
     error: str | None = None
 
+    # Foundation model flag: HuggingFace model ID when pretrained, else None.
+    pretrained_weights: str | None = None
+
     # Per-epoch log entries (not persisted in parquet; go to JSONL separately)
     epoch_logs: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
@@ -105,6 +108,7 @@ class RunResult:
             "epochs_trained": self.epochs_trained,
             "stopped_early": self.stopped_early,
             "error": self.error,
+            "pretrained_weights": self.pretrained_weights,
         }
 
 
@@ -329,6 +333,14 @@ class BenchmarkEngine:
 
         model = create_model(model_name, config=model_config)
         model.to(self.device)
+
+        # Inject dataset scaler for zero-shot pretrained models so they can
+        # inverse-scale the benchmark's StandardScaler inputs before passing
+        # them to the pretrained pipeline (which expects original-scale values).
+        if getattr(model, "_is_pretrained_zeroshot", False):
+            model._benchmark_scaler = scaler
+            model._n_channels = n_channels
+
         param_count = _count_parameters(model)
 
         training_cfg = TrainingConfig(epochs=1, device=self.device, lr=self.lr)
@@ -455,6 +467,8 @@ class BenchmarkEngine:
         )
         logger.finish()
 
+        pretrained_weights = getattr(model, "_model_id", None) if getattr(model, "_is_pretrained_zeroshot", False) else None
+
         return RunResult(
             model_name=model_name,
             dataset_name=dataset_name,
@@ -472,6 +486,7 @@ class BenchmarkEngine:
             epochs_trained=len(epoch_logs),
             stopped_early=stopped_early,
             epoch_logs=epoch_logs,
+            pretrained_weights=pretrained_weights,
         )
 
     # ------------------------------------------------------------------
@@ -565,6 +580,18 @@ class BenchmarkEngine:
 
         model = create_model(model_name, config=model_config)
         model.to(self.device)
+
+        # M4 datasets are univariate (enc_in=1); no scaler to inject, but flag
+        # the model so the predict() call can identify it as zero-shot.
+        # M4SeriesDataset performs per-series z-score normalisation, so the
+        # wrapper's predict() operates in that normalised space; the engine
+        # manually denormalises via mean_enc/std_enc before evaluation.
+        # For Chronos-Bolt on M4, scaler injection is NOT applied here because
+        # the M4 engine uses a different denormalisation path (per-series stats).
+        # The wrapper therefore receives already-normalised inputs and returns
+        # predictions in normalised space, which is consistent with all other
+        # models in the M4 track.
+
         param_count = _count_parameters(model)
 
         training_cfg = TrainingConfig(epochs=1, device=self.device, lr=self.lr)
@@ -663,6 +690,8 @@ class BenchmarkEngine:
         )
         logger.finish()
 
+        pretrained_weights_m4 = getattr(model, "_model_id", None) if getattr(model, "_is_pretrained_zeroshot", False) else None
+
         return RunResult(
             model_name=model_name,
             dataset_name=dataset.frequency_label,
@@ -683,6 +712,7 @@ class BenchmarkEngine:
             epochs_trained=len(epoch_logs),
             stopped_early=stopped_early,
             epoch_logs=epoch_logs,
+            pretrained_weights=pretrained_weights_m4,
         )
 
     # ------------------------------------------------------------------

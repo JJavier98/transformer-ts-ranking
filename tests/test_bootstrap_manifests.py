@@ -36,9 +36,9 @@ def test_materialize_bootstrap_manifests_writes_versioned_files(tmp_path: Path) 
     assert "Yearly" in m4_payload["frequencies"]
     assert m4_payload["defaults"]["naive2_file"] == "submission-Naive2.csv"
     assert capability_payload["eligibility_policy"]["source_precedence"][0] == "manual_override"
-    assert len(capability_payload["models"]) == 29
-    assert capability_payload["summary"]["eligible_long_term"] == 28
-    assert capability_payload["summary"]["eligible_m4"] == 28
+    assert len(capability_payload["models"]) == 31  # 29 original + chronos_bolt + lag_llama_pretrained
+    assert capability_payload["summary"]["eligible_long_term"] == 30  # +chronos_bolt +lag_llama_pretrained
+    assert capability_payload["summary"]["eligible_m4"] == 30  # +chronos_bolt +lag_llama_pretrained
 
     chronos2 = next(model for model in capability_payload["models"] if model["model_name"] == "chronos2")
     assert chronos2["eligible_long_term"] is True

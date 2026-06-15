@@ -23,6 +23,21 @@ from typing import Any
 # prevent known behavioural anomalies.
 # ---------------------------------------------------------------------------
 _MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
+    "chronos_bolt": {
+        # Official pretrained Chronos-Bolt from HuggingFace (zero-shot).
+        # chronos-bolt-small: ~21 M params, recommended for benchmark balance.
+        # Switch to "amazon/chronos-bolt-base" (~205 M) for best accuracy.
+        "model_id": "amazon/chronos-bolt-small",
+        "torch_dtype": "float32",
+    },
+    "lag_llama_pretrained": {
+        # Official Lag-Llama pretrained weights from HuggingFace (zero-shot).
+        # Architecture: d_model=144, 8 layers, 8 heads, SwiGLU d_ff=512, 90 lags.
+        # Autoregressive decoding: slow for long horizons (pred_len forward passes).
+        "hf_repo": "time-series-foundation-models/Lag-Llama",
+        "hf_filename": "model.safetensors",
+        "scaling": "mean",
+    },
     "fedformer": {
         # Default BERT-large scale would OOM on 8 GB GPU at batch_size ≥ 4.
         "hidden_size": 256,

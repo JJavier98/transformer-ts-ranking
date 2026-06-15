@@ -34,6 +34,8 @@ dependencies = [
     # [tool.uv.sources] so its runtime deps (einops, reformer-pytorch,
     # local-attention, pytorch-lightning, torchmetrics, ...) land in the env.
     "s-transformers-lib",
+    "chronos-forecasting>=2.2.2",
+    "gluonts[torch]>=0.14",
 ]
 
 [project.optional-dependencies]

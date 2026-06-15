@@ -190,6 +190,31 @@ MANUAL_CAPABILITY_OVERRIDES = {
             "Manual override: runtime compatibility probe succeeded for long_term and M4 with the encoder-only profile.",
         ],
     },
+    "chronos_bolt": {
+        "supports_regular_mts": True,
+        "supports_univariate": True,
+        "eligible_long_term": True,
+        "eligible_m4": True,
+        "adapter_name": "pretrained_zeroshot",
+        "pretrained": True,
+        "pretrained_source": "huggingface",
+        "pretrained_model_id": "amazon/chronos-bolt-small",
+        "review_status": "manual_override",
+        "eligibility_source": "manual_override",
+        "eligibility_reason": (
+            "Official Chronos-Bolt pretrained model (zero-shot). Included as a foundation-model "
+            "baseline to compare against task-specific transformers trained from scratch. The "
+            "benchmark engine injects the dataset scaler so the normalisation round-trip is "
+            "handled correctly without modifying the batch protocol."
+        ),
+        "notes_append": [
+            "Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.",
+            "Weights are downloaded from HuggingFace (amazon/chronos-bolt-small) on first predict().",
+            "Multi-channel inputs are treated as independent univariate series (channel-wise inference).",
+            "Results tagged pretrained_weights=amazon/chronos-bolt-small for transparency in leaderboards.",
+            "NOT comparable to from-scratch models on equal footing; used as a foundation-model baseline.",
+        ],
+    },
     "chronos2": {
         "requires_exogenous": False,
         "eligible_long_term": True,
@@ -286,6 +311,32 @@ MANUAL_CAPABILITY_OVERRIDES = {
         ),
         "notes_append": [
             "Manual override: runtime compatibility probe succeeded for long_term and M4 with the time-marked encoder profile.",
+        ],
+    },
+    "lag_llama_pretrained": {
+        "supports_regular_mts": True,
+        "supports_univariate": True,
+        "eligible_long_term": True,
+        "eligible_m4": True,
+        "adapter_name": "pretrained_zeroshot",
+        "pretrained": True,
+        "pretrained_source": "huggingface",
+        "pretrained_model_id": "time-series-foundation-models/Lag-Llama",
+        "review_status": "manual_override",
+        "eligibility_source": "manual_override",
+        "eligibility_reason": (
+            "Official Lag-Llama pretrained model (zero-shot, univariate). Included as a foundation-model "
+            "baseline alongside Chronos-Bolt to answer whether pretrained foundation models are competitive "
+            "with task-specific transformers trained from scratch. Multi-channel inputs are handled "
+            "by predicting each channel independently."
+        ),
+        "notes_append": [
+            "Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.",
+            "Weights are downloaded from HuggingFace (time-series-foundation-models/Lag-Llama) on first predict().",
+            "Intrinsically univariate; multi-channel series are predicted channel-by-channel.",
+            "Autoregressive decoding: pred_len sequential forward passes (~pred_len× slower than parallel models).",
+            "Results tagged pretrained_weights=time-series-foundation-models/Lag-Llama for transparency.",
+            "NOT comparable to from-scratch models on equal footing; used as a foundation-model baseline.",
         ],
     },
     "tpatchgnn": {
