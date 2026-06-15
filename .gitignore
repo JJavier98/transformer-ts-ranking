@@ -254,6 +254,11 @@ results/
 paper/
 logs/
 
+# HuggingFace model weight cache — weights are downloaded automatically on first
+# predict() via hf_hub_download(). No need to track binaries in git.
+# Set HF_HOME env var to point here when running on a cluster node.
+.hf_cache/
+
 # Temporary benchmark test script
 scripts/test_run.py
 
