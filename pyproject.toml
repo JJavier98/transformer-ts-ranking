@@ -18,8 +18,10 @@ dependencies = [
     "matplotlib>=3.8",
     "seaborn>=0.13",
     "scikit-learn>=1.5",
-    # Deep learning (CPU wheel; GPU variant installed separately via torch_env)
-    "torch>=2.5",
+    # Deep learning. Pinned to a CUDA build that still ships Volta (sm_70)
+    # kernels + a cuDNN that supports SM 7.0, so the V100 (dgx) and A100 (dgx2)
+    # nodes both work. See [tool.uv.sources] below for the index pin.
+    "torch>=2.5,<2.7",
     # Config management
     "hydra-core>=1.3",
     "omegaconf>=2.3",
@@ -28,6 +30,10 @@ dependencies = [
     # Serialisation / misc
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
+    # The benchmarked library (git submodule). Installed editable via
+    # [tool.uv.sources] so its runtime deps (einops, reformer-pytorch,
+    # local-attention, pytorch-lightning, torchmetrics, ...) land in the env.
+    "s-transformers-lib",
 ]
 
 [project.optional-dependencies]
@@ -52,15 +58,27 @@ packages = ["src/transformer_ts_ranking"]
 # ---------------------------------------------------------------------------
 [tool.uv]
 # Commit uv.lock for reproducible benchmark environments.
-# The CUDA-specific torch wheels are installed via the extra index below.
-extra-index-url = ["https://download.pytorch.org/whl/cu124"]
-# Development dependencies live in the optional [dev] group so production
-# installs stay lean.
+# IMPORTANT: the cluster GPUs are a mix of V100 (dgx, compute_cap 7.0, driver
+# 535.x) and A100 (dgx2, compute_cap 8.0). The cu128 wheels ship cuDNN 9.19,
+# which DROPPED Volta (SM < 7.5) support — they crash on the V100 nodes with
+# "no kernel image available" / "cuDNN not compatible with SM < 7.5". cu124
+# (cuDNN 9.1) still supports Volta and runs on driver 535 via CUDA minor-version
+# compatibility, so it covers both GPU generations.
 
 [tool.uv.sources]
+# Pin torch to the PyTorch cu124 index so V100 (sm_70) kernels are present.
+torch = [{ index = "pytorch-cu124" }]
 # Point uv to the local submodule so it can be editable-installed together
 # with the main project.
 s-transformers-lib = { path = "s-transformers-lib", editable = true }
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+# Only used for packages explicitly pinned to it (torch). Everything else
+# resolves from PyPI — otherwise uv would try to pull e.g. torchmetrics from
+# this index, which only carries an outdated 1.0.3.
+explicit = true
 
 # ---------------------------------------------------------------------------
 # Ruff (linter / formatter)

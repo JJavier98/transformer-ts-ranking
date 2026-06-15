@@ -64,6 +64,7 @@ _SEQ2SEQ_MODELS = frozenset({
     "quatformer",
     "reformer",
     "scaleformer",
+    "spacetimeformer",
     "transformer",
 })
 

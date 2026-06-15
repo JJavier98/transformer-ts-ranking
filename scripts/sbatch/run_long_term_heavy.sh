@@ -17,20 +17,18 @@ DATASETS=(electricity traffic)
 DATASET="${DATASETS[$SLURM_ARRAY_TASK_ID]}"
 
 REPO=/mnt/homeGPU/JJavierAR/transformer-ts-ranking
+PYTHON="$REPO/.venv/bin/python"
 
-export PATH="/opt/anaconda/anaconda3/bin:$PATH"
-export PATH="/opt/anaconda/bin:$PATH"
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
-eval "$(conda shell.bash hook)"
-conda activate torch_env
 
 echo "[$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID] Starting heavy long-term benchmark for dataset: $DATASET"
 echo "Node: $(hostname)  GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
+echo "Python: $($PYTHON --version 2>&1)"
 
 cd "$REPO"
 mkdir -p "$REPO/logs"
 
-python "$REPO/scripts/launch_benchmark.py" \
+"$PYTHON" "$REPO/scripts/launch_benchmark.py" \
     training=paper_ready \
     experiment=long_term \
     "experiment.datasets=[$DATASET]" \
