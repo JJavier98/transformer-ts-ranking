@@ -26,6 +26,7 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,11 @@ from .wandb_logger import WandbLogger  # noqa: TID252
 
 # The library submodule is added to sys.path by runner.py / the CLI shim.
 # Import lazily so tests that mock the library can override it.
+
+
+def _utc_now_iso() -> str:
+    """Return the current UTC time as an ISO-8601 string (microsecond precision)."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -79,6 +85,11 @@ class RunResult:
     # Foundation model flag: HuggingFace model ID when pretrained, else None.
     pretrained_weights: str | None = None
 
+    # ISO-8601 UTC timestamp of when this run completed.
+    # Used to deduplicate when the same (model, dataset, horizon, seed) is
+    # re-run: keep the row with the latest run_timestamp.
+    run_timestamp: str = field(default_factory=lambda: _utc_now_iso())
+
     # Per-epoch log entries (not persisted in parquet; go to JSONL separately)
     epoch_logs: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
@@ -109,6 +120,7 @@ class RunResult:
             "stopped_early": self.stopped_early,
             "error": self.error,
             "pretrained_weights": self.pretrained_weights,
+            "run_timestamp": self.run_timestamp,
         }
 
 

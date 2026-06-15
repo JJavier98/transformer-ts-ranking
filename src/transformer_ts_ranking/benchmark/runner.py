@@ -134,10 +134,20 @@ class BenchmarkRunner:
 
         if all_records:
             frame = pd.DataFrame(all_records)
-            # Merge with any previously persisted results.
+            # Merge with any previously persisted results, then deduplicate:
+            # keep the most recent row per (model, dataset, horizon, seed, task)
+            # so that re-runs cleanly replace stale/error rows.
             if self._parquet_path.exists():
                 existing = pd.read_parquet(self._parquet_path)
                 frame = pd.concat([existing, frame], ignore_index=True)
+            _RUN_KEY = ["model_name", "dataset_name", "horizon", "seed", "task"]
+            if "run_timestamp" in frame.columns:
+                frame = (
+                    frame
+                    .sort_values("run_timestamp", ascending=True)
+                    .drop_duplicates(subset=_RUN_KEY, keep="last")
+                    .reset_index(drop=True)
+                )
             frame.to_parquet(self._parquet_path, index=False)
             return frame
 
