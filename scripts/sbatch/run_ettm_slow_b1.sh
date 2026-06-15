@@ -1,17 +1,16 @@
 #!/bin/bash
-# ETTm1/ETTm2 slow follow-up — Batch 1: triformer, quatformer, lag_llama, spacetimeformer
+# ETTm1/ETTm2 slow follow-up — Batch 1: triformer, quatformer, spacetimeformer
+# (lag_llama from-scratch excluded; only lag_llama_pretrained is in scope)
 #
 # Run AFTER job 149281 (lt-bench covering ETTm) has finished.
 # Deduplication ensures no conflicts with previously written results.
 #
-# Array layout: task 0-1 = (ETTm1, ETTm2) for seed 42  [SEED env var overrides]
-# Default: all 3 seeds in one job (~70h each dataset).
-# For shorter wall-clock: submit once per seed with SEED=42, SEED=123, SEED=2026.
+# Estimated: ~57h per dataset (all seeds). For shorter wall-clock, run per seed (~19h):
 #
-# Usage (all seeds):
+# Usage (all seeds, ~57h):
 #   sbatch scripts/sbatch/run_ettm_slow_b1.sh
 #
-# Usage (per seed):
+# Usage (per seed, ~19h each):
 #   for s in 42 123 2026; do
 #       sbatch -J "ettm-slow-b1-s$s" --export=SEED=$s scripts/sbatch/run_ettm_slow_b1.sh
 #   done
@@ -27,7 +26,8 @@ DATASETS=(ETTm1 ETTm2)
 DATASET="${DATASETS[$SLURM_ARRAY_TASK_ID]}"
 
 # Ordered fast-to-slow so more models complete if the job hits the wall.
-MODELS="triformer,quatformer,lag_llama,spacetimeformer"
+# lag_llama (from-scratch) excluded — only lag_llama_pretrained is in scope.
+MODELS="triformer,quatformer,spacetimeformer"
 
 REPO=/mnt/homeGPU/JJavierAR/transformer-ts-ranking
 PYTHON="$REPO/.venv/bin/python"

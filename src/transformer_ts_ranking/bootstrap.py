@@ -217,18 +217,34 @@ MANUAL_CAPABILITY_OVERRIDES = {
     },
     "chronos2": {
         "requires_exogenous": False,
-        "eligible_long_term": True,
-        "eligible_m4": True,
+        "eligible_long_term": False,
+        "eligible_m4": False,
         "adapter_name": "encoder_only",
         "review_status": "manual_override",
         "eligibility_source": "manual_override",
         "eligibility_reason": (
-            "Chronos2Config defaults n_future_covariates=0 and Chronos2.forward() accepts x_enc "
-            "with optional time marks and optional future covariates, so the model should enter "
-            "both benchmark tracks by default."
+            "Excluded by design: the benchmark represents Chronos via chronos_bolt "
+            "(official Amazon pretrained weights, zero-shot). Training Chronos-2 from "
+            "scratch is out of scope for this survey."
         ),
         "notes_append": [
-            "Manual override: Chronos2 does not require exogenous covariates by default; bootstrap exclusion removed.",
+            "Excluded from benchmark: paper evaluates only the pretrained foundation model "
+            "track (chronos_bolt). Training Chronos-2 from scratch is not in scope.",
+        ],
+    },
+    "lag_llama": {
+        "eligible_long_term": False,
+        "eligible_m4": False,
+        "review_status": "manual_override",
+        "eligibility_source": "manual_override",
+        "eligibility_reason": (
+            "Excluded by design: the benchmark represents Lag-Llama via lag_llama_pretrained "
+            "(official pretrained weights, zero-shot). Training Lag-Llama from scratch is "
+            "out of scope for this survey."
+        ),
+        "notes_append": [
+            "Excluded from benchmark: paper evaluates only the pretrained foundation model "
+            "track (lag_llama_pretrained). Training from scratch is not in scope.",
         ],
     },
     "contiformer": {

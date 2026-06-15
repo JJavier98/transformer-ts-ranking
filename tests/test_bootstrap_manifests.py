@@ -37,14 +37,12 @@ def test_materialize_bootstrap_manifests_writes_versioned_files(tmp_path: Path) 
     assert m4_payload["defaults"]["naive2_file"] == "submission-Naive2.csv"
     assert capability_payload["eligibility_policy"]["source_precedence"][0] == "manual_override"
     assert len(capability_payload["models"]) == 31  # 29 original + chronos_bolt + lag_llama_pretrained
-    assert capability_payload["summary"]["eligible_long_term"] == 30  # +chronos_bolt +lag_llama_pretrained
-    assert capability_payload["summary"]["eligible_m4"] == 30  # +chronos_bolt +lag_llama_pretrained
+    assert capability_payload["summary"]["eligible_long_term"] == 28  # chronos2 + lag_llama excluded (from-scratch not in scope)
+    assert capability_payload["summary"]["eligible_m4"] == 28
 
     chronos2 = next(model for model in capability_payload["models"] if model["model_name"] == "chronos2")
-    assert chronos2["eligible_long_term"] is True
-    assert chronos2["eligible_m4"] is True
-    assert chronos2["requires_exogenous"] is False
-    assert chronos2["adapter_name"] == "encoder_only"
+    assert chronos2["eligible_long_term"] is False  # excluded: use chronos_bolt (pretrained)
+    assert chronos2["eligible_m4"] is False
     assert chronos2["eligibility_source"] == "manual_override"
 
     airformer = next(model for model in capability_payload["models"] if model["model_name"] == "airformer")

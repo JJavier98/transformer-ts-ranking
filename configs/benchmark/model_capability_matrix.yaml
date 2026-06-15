@@ -1,4 +1,4 @@
-generated_at: '2026-06-15T00:00:00.000000+00:00'
+generated_at: '2026-06-15T14:47:56.159179+00:00'
 summary:
   total_models: 31
   filesystem_models: 31
@@ -6,8 +6,8 @@ summary:
   filesystem_only: 0
   registry_only: 0
   inspection_failures: 0
-  eligible_long_term: 30
-  eligible_m4: 30
+  eligible_long_term: 28
+  eligible_m4: 28
 models:
 - model_name: airformer
   registered: true
@@ -114,21 +114,21 @@ models:
   requires_exogenous: false
   requires_irregular_times: false
   requires_spatial_structure: false
-  eligible_long_term: true
-  eligible_m4: true
+  eligible_long_term: false
+  eligible_m4: false
   adapter_name: encoder_only
   notes:
   - Bootstrap capability matrix uses deterministic heuristics and requires manual
     review before the full benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: Chronos2 does not require exogenous covariates by default; bootstrap
-    exclusion removed.'
+  - 'Excluded from benchmark: paper evaluates only the pretrained foundation model
+    track (chronos_bolt). Training Chronos-2 from scratch is not in scope.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Chronos2Config defaults n_future_covariates=0 and Chronos2.forward()
-    accepts x_enc with optional time marks and optional future covariates, so the
-    model should enter both benchmark tracks by default.
+  eligibility_reason: 'Excluded by design: the benchmark represents Chronos via chronos_bolt
+    (official Amazon pretrained weights, zero-shot). Training Chronos-2 from scratch
+    is out of scope for this survey.'
 - model_name: chronos_bolt
   registered: true
   supports_regular_mts: true
@@ -140,22 +140,30 @@ models:
   eligible_long_term: true
   eligible_m4: true
   adapter_name: pretrained_zeroshot
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - 'train_step is missing required params: batch, loss_fn, optimizer.'
+  - 'eval_step is missing required params: batch, loss_fn.'
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.
+  - Weights are downloaded from HuggingFace (amazon/chronos-bolt-small) on first predict().
+  - Multi-channel inputs are treated as independent univariate series (channel-wise
+    inference).
+  - Results tagged pretrained_weights=amazon/chronos-bolt-small for transparency in
+    leaderboards.
+  - NOT comparable to from-scratch models on equal footing; used as a foundation-model
+    baseline.
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Official Chronos-Bolt pretrained model (zero-shot). Included
+    as a foundation-model baseline to compare against task-specific transformers trained
+    from scratch. The benchmark engine injects the dataset scaler so the normalisation
+    round-trip is handled correctly without modifying the batch protocol.
   pretrained: true
   pretrained_source: huggingface
   pretrained_model_id: amazon/chronos-bolt-small
-  notes:
-  - Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.
-  - Weights are downloaded from HuggingFace (amazon/chronos-bolt-small) on first predict().
-  - Multi-channel inputs are treated as independent univariate series (channel-wise inference).
-  - Results tagged pretrained_weights=amazon/chronos-bolt-small for transparency in leaderboards.
-  - NOT comparable to from-scratch models on equal footing; used as a foundation-model baseline.
-  review_status: manual_override
-  eligibility_source: manual_override
-  eligibility_reason: >
-    Official Chronos-Bolt pretrained model (zero-shot). Included as a foundation-model
-    baseline to compare against task-specific transformers trained from scratch. The
-    benchmark engine injects the dataset scaler so the normalisation round-trip is
-    handled correctly without modifying the batch protocol.
 - model_name: contiformer
   registered: true
   supports_regular_mts: true
@@ -320,17 +328,21 @@ models:
   requires_exogenous: false
   requires_irregular_times: false
   requires_spatial_structure: false
-  eligible_long_term: true
-  eligible_m4: true
+  eligible_long_term: false
+  eligible_m4: false
   adapter_name: encoder_only
   notes:
   - Bootstrap capability matrix uses deterministic heuristics and requires manual
     review before the full benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  review_status: bootstrap
-  eligibility_source: bootstrap_heuristic
-  eligibility_reason: Included by the bootstrap audit for comparable benchmark tracks.
+  - 'Excluded from benchmark: paper evaluates only the pretrained foundation model
+    track (lag_llama_pretrained). Training from scratch is not in scope.'
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: 'Excluded by design: the benchmark represents Lag-Llama via
+    lag_llama_pretrained (official pretrained weights, zero-shot). Training Lag-Llama
+    from scratch is out of scope for this survey.'
 - model_name: lag_llama_pretrained
   registered: true
   supports_regular_mts: true
@@ -342,23 +354,32 @@ models:
   eligible_long_term: true
   eligible_m4: true
   adapter_name: pretrained_zeroshot
+  notes:
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual
+    review before the full benchmark.
+  - 'train_step is missing required params: batch, loss_fn, optimizer.'
+  - 'eval_step is missing required params: batch, loss_fn.'
+  - Config runtime instantiation was not attempted in the static audit.
+  - Versioned from the static audit; review before exhaustive benchmarking.
+  - Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.
+  - Weights are downloaded from HuggingFace (time-series-foundation-models/Lag-Llama)
+    on first predict().
+  - Intrinsically univariate; multi-channel series are predicted channel-by-channel.
+  - "Autoregressive decoding: pred_len sequential forward passes (~pred_len\xD7 slower\
+    \ than parallel models)."
+  - Results tagged pretrained_weights=time-series-foundation-models/Lag-Llama for
+    transparency.
+  - NOT comparable to from-scratch models on equal footing; used as a foundation-model
+    baseline.
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Official Lag-Llama pretrained model (zero-shot, univariate).
+    Included as a foundation-model baseline alongside Chronos-Bolt to answer whether
+    pretrained foundation models are competitive with task-specific transformers trained
+    from scratch. Multi-channel inputs are handled by predicting each channel independently.
   pretrained: true
   pretrained_source: huggingface
   pretrained_model_id: time-series-foundation-models/Lag-Llama
-  notes:
-  - Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.
-  - Weights are downloaded from HuggingFace (time-series-foundation-models/Lag-Llama) on first predict().
-  - Intrinsically univariate; multi-channel series are predicted channel-by-channel.
-  - Autoregressive decoding: pred_len sequential forward passes (~pred_len x slower than parallel models).
-  - Results tagged pretrained_weights=time-series-foundation-models/Lag-Llama for transparency.
-  - NOT comparable to from-scratch models on equal footing; used as a foundation-model baseline.
-  review_status: manual_override
-  eligibility_source: manual_override
-  eligibility_reason: >
-    Official Lag-Llama pretrained model (zero-shot, univariate). Included as a foundation-model
-    baseline alongside Chronos-Bolt to answer whether pretrained foundation models are competitive
-    with task-specific transformers trained from scratch. Multi-channel inputs are handled
-    by predicting each channel independently.
 - model_name: multipatchformer
   registered: true
   supports_regular_mts: true

@@ -96,34 +96,19 @@ JOB_ELEC_B5=$(sbatch \
     "$SCRIPT" | awk '{print $NF}')
 echo "  B5 submitted: $JOB_ELEC_B5  (~42h, crossformer)"
 
-# B6: chronos2 alone (~66h)
+# chronos2 and lag_llama (from-scratch) EXCLUDED — benchmark uses only pretrained
+# versions (chronos_bolt, lag_llama_pretrained) via run_foundation.sh.
+
+# B6: spacetimeformer alone (~75h)
 JOB_ELEC_B6=$(sbatch \
     -J "lt-electricity-b6" \
     -o "$LOGS/lt_electricity_b6_%j.out" \
     -e "$LOGS/lt_electricity_b6_%j.err" \
-    --export="DATASET=electricity,MODELS=chronos2" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B6 submitted: $JOB_ELEC_B6  (~66h, chronos2)"
-
-# B7: lag_llama alone (~75h)
-JOB_ELEC_B7=$(sbatch \
-    -J "lt-electricity-b7" \
-    -o "$LOGS/lt_electricity_b7_%j.out" \
-    -e "$LOGS/lt_electricity_b7_%j.err" \
-    --export="DATASET=electricity,MODELS=lag_llama" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B7 submitted: $JOB_ELEC_B7  (~75h, lag_llama)"
-
-# B8: spacetimeformer alone (~75h)
-JOB_ELEC_B8=$(sbatch \
-    -J "lt-electricity-b8" \
-    -o "$LOGS/lt_electricity_b8_%j.out" \
-    -e "$LOGS/lt_electricity_b8_%j.err" \
     --export="DATASET=electricity,MODELS=spacetimeformer" \
     "$SCRIPT" | awk '{print $NF}')
-echo "  B8 submitted: $JOB_ELEC_B8  (~75h, spacetimeformer)"
+echo "  B6 submitted: $JOB_ELEC_B6  (~75h, spacetimeformer)"
 
-echo "  NOTE: pathformer excluded from electricity (estimated 209h, exceeds 4-day limit)."
+echo "  NOTE: pathformer excluded (209h total; use submit_slow_seeded.sh for per-seed jobs)."
 
 # ---------------------------------------------------------------------------
 # TRAFFIC
@@ -196,8 +181,9 @@ JOB_TRAFFIC_B7=$(sbatch \
     "$SCRIPT" | awk '{print $NF}')
 echo "  B7 submitted: $JOB_TRAFFIC_B7  (~62h, crossformer)"
 
-echo "  NOTE: chronos2/lag_llama/spacetimeformer/pathformer excluded from traffic"
-echo "        (estimated >96h each at 862 channels — infeasible in 4-day window)."
+echo "  NOTE: spacetimeformer and pathformer excluded from traffic main batches."
+echo "        Use submit_slow_seeded.sh for per-seed jobs of those two models."
+echo "        chronos2 and lag_llama (from-scratch) not in scope — use pretrained versions."
 
 # ---------------------------------------------------------------------------
 # Summary
@@ -205,7 +191,7 @@ echo "        (estimated >96h each at 862 channels — infeasible in 4-day windo
 
 echo ""
 echo "=== Job IDs submitted ==="
-echo "  Electricity: $JOB_ELEC_B1 $JOB_ELEC_B2 $JOB_ELEC_B3 $JOB_ELEC_B4 $JOB_ELEC_B5 $JOB_ELEC_B6 $JOB_ELEC_B7 $JOB_ELEC_B8"
+echo "  Electricity: $JOB_ELEC_B1 $JOB_ELEC_B2 $JOB_ELEC_B3 $JOB_ELEC_B4 $JOB_ELEC_B5 $JOB_ELEC_B6"
 echo "  Traffic:     $JOB_TRAFFIC_B1 $JOB_TRAFFIC_B2 $JOB_TRAFFIC_B3 $JOB_TRAFFIC_B4 $JOB_TRAFFIC_B5 $JOB_TRAFFIC_B6 $JOB_TRAFFIC_B7"
 echo ""
 echo "Watch queue: squeue -u \$USER"
