@@ -1,13 +1,20 @@
 #!/bin/bash
 # ETTm1/ETTm2 slow follow-up — Batch 1: triformer, quatformer, lag_llama, spacetimeformer
 #
-# Run AFTER job 149281 (or any lt-bench job covering ETTm) has finished.
-# Deduplication in the runner ensures no conflicts with previously written results.
+# Run AFTER job 149281 (lt-bench covering ETTm) has finished.
+# Deduplication ensures no conflicts with previously written results.
 #
-# Estimated: ~70h per dataset (ETTm1 and ETTm2 run in parallel on separate nodes).
+# Array layout: task 0-1 = (ETTm1, ETTm2) for seed 42  [SEED env var overrides]
+# Default: all 3 seeds in one job (~70h each dataset).
+# For shorter wall-clock: submit once per seed with SEED=42, SEED=123, SEED=2026.
 #
-# Usage:
+# Usage (all seeds):
 #   sbatch scripts/sbatch/run_ettm_slow_b1.sh
+#
+# Usage (per seed):
+#   for s in 42 123 2026; do
+#       sbatch -J "ettm-slow-b1-s$s" --export=SEED=$s scripts/sbatch/run_ettm_slow_b1.sh
+#   done
 
 #SBATCH --job-name ettm-slow-b1
 #SBATCH --partition dgx2,dgx
@@ -19,7 +26,7 @@
 DATASETS=(ETTm1 ETTm2)
 DATASET="${DATASETS[$SLURM_ARRAY_TASK_ID]}"
 
-# Ordered fast-to-slow within the batch to maximise results before any time limit.
+# Ordered fast-to-slow so more models complete if the job hits the wall.
 MODELS="triformer,quatformer,lag_llama,spacetimeformer"
 
 REPO=/mnt/homeGPU/JJavierAR/transformer-ts-ranking
@@ -27,7 +34,15 @@ PYTHON="$REPO/.venv/bin/python"
 
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 
-echo "[$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID] ETTm slow follow-up B1: $DATASET | $MODELS"
+if [[ -n "${SEED}" ]]; then
+    SEED_ARG="training.seeds=[$SEED]"
+    SEED_TAG=" seed=$SEED"
+else
+    SEED_ARG=""
+    SEED_TAG=" seeds=[42,123,2026]"
+fi
+
+echo "[$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID] ETTm slow B1: $DATASET | $MODELS${SEED_TAG}"
 echo "Node: $(hostname)  GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
 echo "Python: $($PYTHON --version 2>&1)"
 
@@ -39,6 +54,7 @@ mkdir -p "$REPO/logs"
     experiment=long_term \
     "experiment.datasets=[$DATASET]" \
     "experiment.models=[$MODELS]" \
+    ${SEED_ARG:+"$SEED_ARG"} \
     "+results_dir=results/raw/long_term/$DATASET" \
     "hydra.run.dir=outputs/long_term/${DATASET}_slow_b1"
 
