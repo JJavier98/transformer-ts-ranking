@@ -1,197 +1,97 @@
 #!/bin/bash
-# Submit all electricity and traffic batch jobs.
+# Submit all electricity + traffic batch jobs as SLURM arrays.
+# Each array has task 0 = electricity, task 1 = traffic; both run in parallel.
 #
-# PREREQUISITE: cancel the monolithic lt-heavy job first:
-#   scancel 149282
+# Model batches are designed to fit within the 4-day (96h) cluster limit for
+# the heavier dataset (traffic, 862 channels). Estimates use measured ETTh2
+# timings scaled by channel count (×6 CI / ×15 CM for electricity; ×8/×22 traffic).
 #
-# Then run this script to submit all model-batched replacements:
+# Standard batches (7 array jobs, 2 tasks each = 14 GPU-jobs total):
+#
+#   B1  ~75h/traffic  12 models — fast, channel-independent
+#   B2  ~86h/traffic   4 models — medium (scaleformer, card, etsformer, triformer)
+#   B3  ~88h/traffic   3 models — basisformer, autoformer, airformer
+#   B4  ~75h/traffic   2 models — quatformer, earthformer
+#   B5  ~59h/traffic   1 model  — contiformer
+#   B6  ~59h/traffic   1 model  — deformable_tst
+#   B7  ~62h/traffic   1 model  — crossformer
+#
+# Per-seed batches (3 array jobs × 2 seeds/model × 2 models = 12 GPU-jobs):
+#   spacetimeformer — ~75h/seed electricity, ~37h/seed traffic   ✅
+#   pathformer      — ~70h/seed electricity, ~102h/seed traffic  ⚠ borderline on traffic
+#
+# chronos2 and lag_llama (from-scratch) are NOT included — the benchmark uses
+# only their pretrained versions (chronos_bolt, lag_llama_pretrained).
+#
+# Usage:
 #   bash scripts/sbatch/submit_heavy_batches.sh
-#
-# Each batch is sized to fit within the 4-day (96h) cluster time limit.
-# Models within each batch are ordered fastest-first so the most results
-# accumulate before any unexpected wall-clock hit.
-#
-# Timing estimates (A100, based on measured ETTh2 data scaled by channel count):
-#
-#   ELECTRICITY (321 channels, ×6 CI / ×15 CM vs ETTh2):
-#     B1  ~84h  14 models (fast, channel-independent)
-#     B2  ~79h  4 models  (medium)
-#     B3  ~53h  2 models
-#     B4  ~80h  2 models
-#     B5  ~42h  crossformer
-#     B6  ~66h  chronos2
-#     B7  ~75h  lag_llama
-#     B8  ~75h  spacetimeformer
-#     ---  pathformer (~209h) is INFEASIBLE on electricity; excluded.
-#
-#   TRAFFIC (862 channels, ×8 CI / ×22 CM vs ETTh2):
-#     B1  ~75h  12 models (fast)
-#     B2  ~69h  3 models
-#     B3  ~88h  3 models
-#     B4  ~75h  2 models
-#     B5  ~59h  contiformer
-#     B6  ~59h  deformable_tst
-#     B7  ~62h  crossformer
-#     ---  chronos2/lag_llama/spacetimeformer/pathformer are INFEASIBLE on traffic; excluded.
 
 set -e
 REPO=/mnt/homeGPU/JJavierAR/transformer-ts-ranking
-SCRIPT="$REPO/scripts/sbatch/run_lt_batch.sh"
+SCRIPT="$REPO/scripts/sbatch/run_heavy_batch.sh"
 LOGS="$REPO/logs"
 mkdir -p "$LOGS"
 
-# ---------------------------------------------------------------------------
-# ELECTRICITY
-# ---------------------------------------------------------------------------
-
-echo "=== Submitting electricity batches ==="
-
-# B1: 15 fast models — channel-independent + small channel-mixing (~84h estimated)
-# etsformer included here (similar speed to fedformer); absent from ETTh2 logs — may have crashed, needs re-run.
-ELEC_B1="itransformer,timexer,transformer,patchtst,multipatchformer,pyraformer,nonstationary_transformer,cats,reformer,tft,informer,etsformer,fedformer,scaleformer,card"
-JOB_ELEC_B1=$(sbatch \
-    -J "lt-electricity-b1" \
-    -o "$LOGS/lt_electricity_b1_%j.out" \
-    -e "$LOGS/lt_electricity_b1_%j.err" \
-    --export="DATASET=electricity,MODELS=$ELEC_B1" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B1 submitted: $JOB_ELEC_B1  (~84h, 15 models)"
-
-# B2: medium models — basisformer, autoformer, triformer, airformer (~79h)
-ELEC_B2="basisformer,autoformer,triformer,airformer"
-JOB_ELEC_B2=$(sbatch \
-    -J "lt-electricity-b2" \
-    -o "$LOGS/lt_electricity_b2_%j.out" \
-    -e "$LOGS/lt_electricity_b2_%j.err" \
-    --export="DATASET=electricity,MODELS=$ELEC_B2" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B2 submitted: $JOB_ELEC_B2  (~79h, basisformer autoformer triformer airformer)"
-
-# B3: quatformer + earthformer (~53h)
-ELEC_B3="quatformer,earthformer"
-JOB_ELEC_B3=$(sbatch \
-    -J "lt-electricity-b3" \
-    -o "$LOGS/lt_electricity_b3_%j.out" \
-    -e "$LOGS/lt_electricity_b3_%j.err" \
-    --export="DATASET=electricity,MODELS=$ELEC_B3" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B3 submitted: $JOB_ELEC_B3  (~53h, quatformer earthformer)"
-
-# B4: contiformer + deformable_tst (~80h)
-ELEC_B4="contiformer,deformable_tst"
-JOB_ELEC_B4=$(sbatch \
-    -J "lt-electricity-b4" \
-    -o "$LOGS/lt_electricity_b4_%j.out" \
-    -e "$LOGS/lt_electricity_b4_%j.err" \
-    --export="DATASET=electricity,MODELS=$ELEC_B4" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B4 submitted: $JOB_ELEC_B4  (~80h, contiformer deformable_tst)"
-
-# B5: crossformer alone (~42h)
-JOB_ELEC_B5=$(sbatch \
-    -J "lt-electricity-b5" \
-    -o "$LOGS/lt_electricity_b5_%j.out" \
-    -e "$LOGS/lt_electricity_b5_%j.err" \
-    --export="DATASET=electricity,MODELS=crossformer" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B5 submitted: $JOB_ELEC_B5  (~42h, crossformer)"
-
-# chronos2 and lag_llama (from-scratch) EXCLUDED — benchmark uses only pretrained
-# versions (chronos_bolt, lag_llama_pretrained) via run_foundation.sh.
-
-# B6: spacetimeformer alone (~75h)
-JOB_ELEC_B6=$(sbatch \
-    -J "lt-electricity-b6" \
-    -o "$LOGS/lt_electricity_b6_%j.out" \
-    -e "$LOGS/lt_electricity_b6_%j.err" \
-    --export="DATASET=electricity,MODELS=spacetimeformer" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B6 submitted: $JOB_ELEC_B6  (~75h, spacetimeformer)"
-
-echo "  NOTE: pathformer excluded (209h total; use submit_slow_seeded.sh for per-seed jobs)."
+submit_array() {
+    local tag="$1" models="$2" seed="${3:-}" est_elec="$4" est_traffic="$5"
+    local seed_export=""
+    local seed_label="all seeds"
+    if [[ -n "$seed" ]]; then
+        seed_export=",SEED=$seed"
+        seed_label="seed=$seed"
+    fi
+    local jid
+    jid=$(sbatch \
+        -J "heavy-${tag}" \
+        -o "$LOGS/heavy_${tag}_%A_%a.out" \
+        -e "$LOGS/heavy_${tag}_%A_%a.err" \
+        --export="MODELS=$models${seed_export}" \
+        "$SCRIPT" | awk '{print $NF}')
+    echo "  $jid  [${tag}] $seed_label  elec~${est_elec}h  traffic~${est_traffic}h"
+}
 
 # ---------------------------------------------------------------------------
-# TRAFFIC
+# Standard batches — all 3 seeds, array[electricity, traffic]
 # ---------------------------------------------------------------------------
+echo "=== Standard batches (arrays of 2) ==="
 
+# B1: 12 fast models (~50h electricity / ~75h traffic)
+B1="itransformer,timexer,transformer,patchtst,multipatchformer,pyraformer,nonstationary_transformer,cats,reformer,tft,informer,fedformer"
+submit_array "b1" "$B1" "" 50 75
+
+# B2: scaleformer, card, etsformer, triformer (~57h electricity / ~86h traffic)
+submit_array "b2" "scaleformer,card,etsformer,triformer" "" 57 86
+
+# B3: basisformer, autoformer, airformer (~58h electricity / ~88h traffic)
+submit_array "b3" "basisformer,autoformer,airformer" "" 58 88
+
+# B4: quatformer, earthformer (~53h electricity / ~75h traffic)
+submit_array "b4" "quatformer,earthformer" "" 53 75
+
+# B5: contiformer (~40h electricity / ~59h traffic)
+submit_array "b5" "contiformer" "" 40 59
+
+# B6: deformable_tst (~40h electricity / ~59h traffic)
+submit_array "b6" "deformable_tst" "" 40 59
+
+# B7: crossformer (~42h electricity / ~62h traffic)
+submit_array "b7" "crossformer" "" 42 62
+
+# ---------------------------------------------------------------------------
+# Per-seed batches — spacetimeformer and pathformer exceed 96h with all seeds
+# ---------------------------------------------------------------------------
 echo ""
-echo "=== Submitting traffic batches ==="
+echo "=== Per-seed batches (arrays of 2, 3 submissions per model) ==="
 
-# B1: 13 fast models (~75h)
-TRAFFIC_B1="itransformer,timexer,transformer,patchtst,multipatchformer,pyraformer,nonstationary_transformer,cats,reformer,tft,informer,etsformer,fedformer"
-JOB_TRAFFIC_B1=$(sbatch \
-    -J "lt-traffic-b1" \
-    -o "$LOGS/lt_traffic_b1_%j.out" \
-    -e "$LOGS/lt_traffic_b1_%j.err" \
-    --export="DATASET=traffic,MODELS=$TRAFFIC_B1" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B1 submitted: $JOB_TRAFFIC_B1  (~75h, 13 models)"
+for seed in 42 123 2026; do
+    # spacetimeformer: ~75h/seed electricity, ~37h/seed traffic
+    submit_array "spacetimeformer-s${seed}" "spacetimeformer" "$seed" 75 37
+done
 
-# B2: scaleformer, card, triformer (~69h)
-JOB_TRAFFIC_B2=$(sbatch \
-    -J "lt-traffic-b2" \
-    -o "$LOGS/lt_traffic_b2_%j.out" \
-    -e "$LOGS/lt_traffic_b2_%j.err" \
-    --export="DATASET=traffic,MODELS=scaleformer,card,triformer" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B2 submitted: $JOB_TRAFFIC_B2  (~69h, scaleformer card triformer)"
+for seed in 42 123 2026; do
+    # pathformer: ~70h/seed electricity, ~102h/seed traffic (borderline)
+    submit_array "pathformer-s${seed}" "pathformer" "$seed" 70 102
+done
 
-# B3: basisformer, autoformer, airformer (~88h)
-JOB_TRAFFIC_B3=$(sbatch \
-    -J "lt-traffic-b3" \
-    -o "$LOGS/lt_traffic_b3_%j.out" \
-    -e "$LOGS/lt_traffic_b3_%j.err" \
-    --export="DATASET=traffic,MODELS=basisformer,autoformer,airformer" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B3 submitted: $JOB_TRAFFIC_B3  (~88h, basisformer autoformer airformer)"
-
-# B4: quatformer + earthformer (~75h)
-JOB_TRAFFIC_B4=$(sbatch \
-    -J "lt-traffic-b4" \
-    -o "$LOGS/lt_traffic_b4_%j.out" \
-    -e "$LOGS/lt_traffic_b4_%j.err" \
-    --export="DATASET=traffic,MODELS=quatformer,earthformer" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B4 submitted: $JOB_TRAFFIC_B4  (~75h, quatformer earthformer)"
-
-# B5: contiformer (~59h)
-JOB_TRAFFIC_B5=$(sbatch \
-    -J "lt-traffic-b5" \
-    -o "$LOGS/lt_traffic_b5_%j.out" \
-    -e "$LOGS/lt_traffic_b5_%j.err" \
-    --export="DATASET=traffic,MODELS=contiformer" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B5 submitted: $JOB_TRAFFIC_B5  (~59h, contiformer)"
-
-# B6: deformable_tst (~59h)
-JOB_TRAFFIC_B6=$(sbatch \
-    -J "lt-traffic-b6" \
-    -o "$LOGS/lt_traffic_b6_%j.out" \
-    -e "$LOGS/lt_traffic_b6_%j.err" \
-    --export="DATASET=traffic,MODELS=deformable_tst" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B6 submitted: $JOB_TRAFFIC_B6  (~59h, deformable_tst)"
-
-# B7: crossformer (~62h)
-JOB_TRAFFIC_B7=$(sbatch \
-    -J "lt-traffic-b7" \
-    -o "$LOGS/lt_traffic_b7_%j.out" \
-    -e "$LOGS/lt_traffic_b7_%j.err" \
-    --export="DATASET=traffic,MODELS=crossformer" \
-    "$SCRIPT" | awk '{print $NF}')
-echo "  B7 submitted: $JOB_TRAFFIC_B7  (~62h, crossformer)"
-
-echo "  NOTE: spacetimeformer and pathformer excluded from traffic main batches."
-echo "        Use submit_slow_seeded.sh for per-seed jobs of those two models."
-echo "        chronos2 and lag_llama (from-scratch) not in scope — use pretrained versions."
-
-# ---------------------------------------------------------------------------
-# Summary
-# ---------------------------------------------------------------------------
-
-echo ""
-echo "=== Job IDs submitted ==="
-echo "  Electricity: $JOB_ELEC_B1 $JOB_ELEC_B2 $JOB_ELEC_B3 $JOB_ELEC_B4 $JOB_ELEC_B5 $JOB_ELEC_B6"
-echo "  Traffic:     $JOB_TRAFFIC_B1 $JOB_TRAFFIC_B2 $JOB_TRAFFIC_B3 $JOB_TRAFFIC_B4 $JOB_TRAFFIC_B5 $JOB_TRAFFIC_B6 $JOB_TRAFFIC_B7"
 echo ""
 echo "Watch queue: squeue -u \$USER"
