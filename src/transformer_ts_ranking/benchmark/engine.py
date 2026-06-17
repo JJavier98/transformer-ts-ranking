@@ -251,51 +251,55 @@ class BenchmarkEngine:
         from ..benchmark.window_dataset import LongTermWindowDataset
 
         logger = wandb_logger or WandbLogger.disabled()
-        self._set_seed(seed)
-
-        train_ds = LongTermWindowDataset(dataset, pred_len, "train")
-        val_ds = LongTermWindowDataset(dataset, pred_len, "val")
-        test_ds = LongTermWindowDataset(dataset, pred_len, "test")
-
-        if len(train_ds) == 0 or len(test_ds) == 0:
-            err = "Insufficient windows for this horizon/split combination."
-            logger.finish(error=err)
-            return RunResult(
-                model_name=model_name,
-                dataset_name=dataset.dataset_name,
-                horizon=pred_len,
-                seed=seed,
-                task="long_term",
-                mae=float("nan"),
-                mse=float("nan"),
-                rmse=float("nan"),
-                error=err,
-            )
-
-        train_loader = DataLoader(
-            train_ds,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            drop_last=False,
-        )
-        val_loader = DataLoader(
-            val_ds,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            drop_last=False,
-        ) if len(val_ds) > 0 else None
-
-        test_loader = DataLoader(
-            test_ds,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            drop_last=False,
-        )
 
         try:
+            # _set_seed is inside the try block so that a CUDA device-side assert
+            # from a previous run (which poisons torch.cuda.manual_seed_all) is
+            # caught and recorded as an error rather than crashing the whole runner.
+            self._set_seed(seed)
+
+            train_ds = LongTermWindowDataset(dataset, pred_len, "train")
+            val_ds = LongTermWindowDataset(dataset, pred_len, "val")
+            test_ds = LongTermWindowDataset(dataset, pred_len, "test")
+
+            if len(train_ds) == 0 or len(test_ds) == 0:
+                err = "Insufficient windows for this horizon/split combination."
+                logger.finish(error=err)
+                return RunResult(
+                    model_name=model_name,
+                    dataset_name=dataset.dataset_name,
+                    horizon=pred_len,
+                    seed=seed,
+                    task="long_term",
+                    mae=float("nan"),
+                    mse=float("nan"),
+                    rmse=float("nan"),
+                    error=err,
+                )
+
+            train_loader = DataLoader(
+                train_ds,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+                drop_last=False,
+            )
+            val_loader = DataLoader(
+                val_ds,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+                drop_last=False,
+            ) if len(val_ds) > 0 else None
+
+            test_loader = DataLoader(
+                test_ds,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+                drop_last=False,
+            )
+
             result = self._train_and_eval_long_term(
                 model_name=model_name,
                 model_config=model_config,

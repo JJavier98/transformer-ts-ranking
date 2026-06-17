@@ -6,10 +6,19 @@ specific overrides so neither the runner nor the engine contains any
 ``if model_name ==`` branches.
 
 CLAUDE.md documented overrides are applied here:
-  - fedformer  : BERT-large default is reduced to avoid 8 GB OOM.
-  - patchtst   : Default d_model=768 is tight; benchmarks use d_model=256.
-  - lag_llama  : use_pinball_loss forced off for deterministic point forecasts.
-  - earthformer: data_mode forced to '1d' to prevent accidental 3D mode.
+  - fedformer           : BERT-large default is reduced to avoid 8 GB OOM.
+  - patchtst            : Default d_model=768 is tight; benchmarks use d_model=256.
+  - lag_llama           : use_pinball_loss forced off for deterministic point forecasts.
+  - earthformer         : data_mode forced to '1d' to prevent accidental 3D mode.
+  - spacetimeformer     : max_seq_len raised to 1024 (default 512 causes CUDA index
+                          out-of-bounds for h=720: decoder length = label_len+pred_len = 768).
+  - lag_llama_pretrained: d_model forced to 144 to match pretrained checkpoint dims.
+  - etsformer           : d_layers forced equal to e_layers (model assertion requirement).
+
+Frequency note — ``freq`` in all configs is fixed to ``'h'`` (4 time features).
+The long-term and M4 loaders both produce exactly 4 time features regardless of
+dataset frequency, matching FREQ_MAP['h']=4 used by TimeFeatureEmbedding.  Passing
+the actual dataset frequency (e.g. 'w'→2, 't'→5) would cause a shape mismatch.
 """
 
 from __future__ import annotations
@@ -33,10 +42,12 @@ _MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
     "lag_llama_pretrained": {
         # Official Lag-Llama pretrained weights from HuggingFace (zero-shot).
         # Architecture: d_model=144, 8 layers, 8 heads, SwiGLU d_ff=512, 90 lags.
-        # Autoregressive decoding: slow for long horizons (pred_len forward passes).
+        # d_model must match the checkpoint (144); the base config default of 128
+        # would cause a state_dict size mismatch when loading weights.
         "hf_repo": "time-series-foundation-models/Lag-Llama",
         "hf_filename": "model.safetensors",
         "scaling": "mean",
+        "d_model": 144,
     },
     "fedformer": {
         # Default BERT-large scale would OOM on 8 GB GPU at batch_size ≥ 4.
@@ -61,6 +72,17 @@ _MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
     "earthformer": {
         # Prevent accidental 3D image mode.
         "data_mode": "1d",
+    },
+    "spacetimeformer": {
+        # Default max_seq_len=512 is too small for h=720: the absolute positional
+        # embedding table is indexed up to label_len+pred_len=768 on the decoder,
+        # causing a CUDA device-side assert (index out-of-bounds).
+        "max_seq_len": 1024,
+    },
+    "etsformer": {
+        # ETSFormer asserts e_layers == d_layers.  The base config sets d_layers=1
+        # (encoder-only default) which violates this constraint.
+        "d_layers": 2,
     },
 }
 
@@ -91,9 +113,17 @@ def filter_config_for_model(model_name: str, config: dict[str, Any]) -> Any:
     internally (e.g. ``iTransformerConfig(**dict)``), or it may require a
     typed config dataclass instance directly.  This helper:
       1. Resolves the model's registered config class.
-      2. Filters the input dict to only the declared dataclass fields.
+      2. Filters the input dict to the parameters accepted by ``__init__``.
       3. Instantiates and returns the config class so every model receives
          the type it expects.
+
+    We use ``inspect.signature`` rather than ``dataclasses.fields`` because
+    several config classes (AirFormerConfig, CardConfig, CrossformerConfig,
+    EarthformerConfig, ContiFormerConfig, …) inherit from the ForecastBaseConfig
+    dataclass but declare their own parameters (seq_len, pred_len, enc_in, …)
+    via a regular ``__init__``.  ``dataclasses.fields`` only sees the five
+    parent fields and silently drops the architecture parameters, causing every
+    run to use the default pred_len=96 regardless of the actual horizon.
 
     Args:
         model_name: Canonical model key.
@@ -102,7 +132,7 @@ def filter_config_for_model(model_name: str, config: dict[str, Any]) -> Any:
     Returns:
         Instantiated config class instance, or the filtered dict as fallback.
     """
-    import dataclasses
+    import inspect
     import sys
     from pathlib import Path
 
@@ -113,10 +143,19 @@ def filter_config_for_model(model_name: str, config: dict[str, Any]) -> Any:
     try:
         from src.models import get_config_class  # noqa: PLC0415
         config_cls = get_config_class(model_name)
-        if dataclasses.is_dataclass(config_cls):
-            valid_fields = {f.name for f in dataclasses.fields(config_cls)}
-            filtered = {k: v for k, v in config.items() if k in valid_fields}
-            return config_cls(**filtered)
+        sig = inspect.signature(config_cls.__init__)
+        # Exclude 'self' and variadic **kwargs / *args so they don't consume
+        # the whole dict and mask missing required parameters.
+        valid_params = {
+            k for k, p in sig.parameters.items()
+            if k not in ("self",)
+            and p.kind not in (
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            )
+        }
+        filtered = {k: v for k, v in config.items() if k in valid_params}
+        return config_cls(**filtered)
     except Exception:
         pass  # Fall back to passing the full dict; let the model handle it.
     return config
@@ -159,8 +198,12 @@ def build_long_term_config(
         "c_out": n_channels,
         "num_features": n_channels,
         "input_size": n_channels,
-        # Frequency hint used by time-feature embeddings
-        "freq": freq,
+        # Always 'h' (FREQ_MAP['h']=4) regardless of dataset frequency.
+        # The long-term loader produces exactly 4 time features for every dataset
+        # (month, day, weekday, hour — hour=0 for sub-daily frequencies).
+        # Passing the actual freq (e.g. 'w'→2, 't'→5) causes a shape mismatch
+        # in models that build TimeFeatureEmbedding with FREQ_MAP[freq] input dims.
+        "freq": "h",
         # Conservative defaults to stay within 8 GB VRAM
         "d_model": 128,
         "d_ff": 256,
@@ -200,7 +243,9 @@ def build_m4_config(
         "c_out": 1,
         "num_features": 1,
         "input_size": 1,
-        "freq": "t",
+        # M4 window dataset always produces 4-zero time features; use 'h' so
+        # TimeFeatureEmbedding builds a Linear(4, d_model) rather than (5, d_model).
+        "freq": "h",
         "d_model": 64,
         "d_ff": 128,
         "n_heads": 4,

@@ -14,7 +14,46 @@ defaults:
   label_len: 48
   stride: 1
 datasets:
-  # ---- Fast datasets first (small channels / short series) ----------------
+  electricity:
+    relative_path: data/long_term_forecast/electricity/electricity.csv
+    frequency: h
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+  exchange_rate:
+    relative_path: data/long_term_forecast/exchange_rate/exchange_rate.csv
+    frequency: d
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+  illness:
+    relative_path: data/long_term_forecast/illness/national_illness.csv
+    frequency: w
+    horizons:
+    - 24
+    - 36
+    - 48
+    - 60
+  traffic:
+    relative_path: data/long_term_forecast/traffic/traffic.csv
+    frequency: h
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
+  weather:
+    relative_path: data/long_term_forecast/weather/weather.csv
+    frequency: t
+    horizons:
+    - 96
+    - 192
+    - 336
+    - 720
   ETTh1:
     relative_path: data/long_term_forecast/ETT-small/ETTh1.csv
     frequency: h
@@ -67,44 +106,3 @@ datasets:
       train: 34560
       val: 11520
       test: 11520
-  illness:
-    relative_path: data/long_term_forecast/illness/national_illness.csv
-    frequency: w
-    horizons:
-    - 24
-    - 36
-    - 48
-    - 60
-  exchange_rate:
-    relative_path: data/long_term_forecast/exchange_rate/exchange_rate.csv
-    frequency: d
-    horizons:
-    - 96
-    - 192
-    - 336
-    - 720
-  weather:
-    relative_path: data/long_term_forecast/weather/weather.csv
-    frequency: t
-    horizons:
-    - 96
-    - 192
-    - 336
-    - 720
-  # ---- Heavy datasets last (many channels, slow per epoch) ----------------
-  electricity:
-    relative_path: data/long_term_forecast/electricity/electricity.csv
-    frequency: h
-    horizons:
-    - 96
-    - 192
-    - 336
-    - 720
-  traffic:
-    relative_path: data/long_term_forecast/traffic/traffic.csv
-    frequency: h
-    horizons:
-    - 96
-    - 192
-    - 336
-    - 720
