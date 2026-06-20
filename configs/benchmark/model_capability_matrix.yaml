@@ -6,8 +6,8 @@ summary:
   filesystem_only: 0
   registry_only: 0
   inspection_failures: 0
-  eligible_long_term: 28
-  eligible_m4: 28
+  eligible_long_term: 26
+  eligible_m4: 26
 models:
 - model_name: airformer
   registered: true
@@ -172,8 +172,8 @@ models:
   requires_exogenous: false
   requires_irregular_times: false
   requires_spatial_structure: false
-  eligible_long_term: true
-  eligible_m4: true
+  eligible_long_term: false
+  eligible_m4: false
   adapter_name: encoder_only
   notes:
   - Bootstrap capability matrix uses deterministic heuristics and requires manual
@@ -181,11 +181,14 @@ models:
   - Versioned from the static audit; review before exhaustive benchmarking.
   - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
     the encoder-only profile.'
+  - 'Excluded after smoke test (2026-06-20): CUDA OOM on all 4 horizons of ETTh1 at
+    batch_size=16 on a V100-39GB. ContiFormer''s continuous-time attention allocates
+    memory quadratic in seq_len × channels regardless of batch size; incompatible with
+    the benchmark GPU budget.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Runtime probe confirmed ContiFormer can execute on both benchmark
-    tracks using its regular-time fallback, so it should be included in the automated
-    rankings.
+  eligibility_reason: 'Excluded after smoke test: CUDA OOM on all 4 horizons at
+    batch_size=16. Memory usage is incompatible with the 8–40 GB GPU budget.'
 - model_name: crossformer
   registered: true
   supports_regular_mts: true
@@ -351,8 +354,8 @@ models:
   requires_exogenous: false
   requires_irregular_times: false
   requires_spatial_structure: false
-  eligible_long_term: true
-  eligible_m4: true
+  eligible_long_term: false
+  eligible_m4: false
   adapter_name: pretrained_zeroshot
   notes:
   - Bootstrap capability matrix uses deterministic heuristics and requires manual
@@ -367,16 +370,15 @@ models:
   - Intrinsically univariate; multi-channel series are predicted channel-by-channel.
   - "Autoregressive decoding: pred_len sequential forward passes (~pred_len\xD7 slower\
     \ than parallel models)."
-  - Results tagged pretrained_weights=time-series-foundation-models/Lag-Llama for
-    transparency.
-  - NOT comparable to from-scratch models on equal footing; used as a foundation-model
-    baseline.
+  - 'Excluded after smoke test (2026-06-20): RuntimeError loading state_dict —
+    size mismatch for model.layers.0.mlp.gate_proj.weight. The d_model=144 override
+    in _MODEL_OVERRIDES does not match the actual shape of the HuggingFace checkpoint.
+    Cannot fix without modifying s-transformers-lib source (prohibited).'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Official Lag-Llama pretrained model (zero-shot, univariate).
-    Included as a foundation-model baseline alongside Chronos-Bolt to answer whether
-    pretrained foundation models are competitive with task-specific transformers trained
-    from scratch. Multi-channel inputs are handled by predicting each channel independently.
+  eligibility_reason: 'Excluded after smoke test: pretrained weight loading fails
+    with state_dict size mismatch on model.layers.0.mlp.gate_proj.weight. The
+    checkpoint architecture is incompatible with the config exposed by the library.'
   pretrained: true
   pretrained_source: huggingface
   pretrained_model_id: time-series-foundation-models/Lag-Llama
