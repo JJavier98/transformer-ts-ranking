@@ -86,6 +86,23 @@ _MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
     },
 }
 
+# M4-specific overrides applied ON TOP of _MODEL_OVERRIDES for M4 configs only.
+# These resolve structural incompatibilities between model defaults and the small
+# pred_len values used in some M4 frequency slices (Yearly=6, Weekly=13).
+_M4_MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
+    "scaleformer": {
+        # Default scales=[8,4,2,1] requires pred_len % 8 == 0.  M4 Yearly (6)
+        # and Weekly (13) violate this.  scales=[1] disables multi-scale but
+        # makes the model compatible with any pred_len.
+        "scales": [1],
+    },
+    "multipatchformer": {
+        # Default n_sar_steps=8 requires pred_len >= 8.  M4 Yearly (pred_len=6)
+        # violates this.  Setting n_sar_steps=4 satisfies all M4 horizons (≥ 6).
+        "n_sar_steps": 4,
+    },
+}
+
 # Models whose seq2seq nature requires an explicit label_len in the config.
 # All other eligible models receive label_len=0 (encoder-only style).
 _SEQ2SEQ_MODELS = frozenset({
@@ -214,7 +231,7 @@ def build_long_term_config(
     }
 
     config.update(_MODEL_OVERRIDES.get(model_name, {}))
-    return config
+    return config  # _M4_MODEL_OVERRIDES not applied here — long_term only
 
 
 def build_m4_config(
@@ -255,4 +272,5 @@ def build_m4_config(
     }
 
     config.update(_MODEL_OVERRIDES.get(model_name, {}))
+    config.update(_M4_MODEL_OVERRIDES.get(model_name, {}))
     return config

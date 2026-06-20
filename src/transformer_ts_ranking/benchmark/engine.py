@@ -534,20 +534,24 @@ class BenchmarkEngine:
         from ..benchmark.window_dataset import M4SeriesDataset
 
         logger = wandb_logger or WandbLogger.disabled()
-        self._set_seed(seed)
-
-        label_len = _extract_label_len(model_config)
-        m4_ds = M4SeriesDataset(dataset, seq_len=seq_len, label_len=label_len)
-        m4_loader = DataLoader(
-            m4_ds,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            drop_last=False,
-            collate_fn=_m4_collate_fn,
-        )
 
         try:
+            # _set_seed inside try so a CUDA device-side assert from a prior run
+            # (which poisons torch.cuda.manual_seed_all) is caught per-run rather
+            # than crashing the whole M4 runner — mirrors the long_term fix.
+            self._set_seed(seed)
+
+            label_len = _extract_label_len(model_config)
+            m4_ds = M4SeriesDataset(dataset, seq_len=seq_len, label_len=label_len)
+            m4_loader = DataLoader(
+                m4_ds,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+                drop_last=False,
+                collate_fn=_m4_collate_fn,
+            )
+
             result = self._train_and_eval_m4(
                 model_name=model_name,
                 model_config=model_config,
@@ -588,6 +592,7 @@ class BenchmarkEngine:
         """Full M4 training + OWA evaluation."""
         from src.interfaces.forecasting import ForecastInput, TrainingConfig  # noqa: PLC0415
         from src.models import create_model                                    # noqa: PLC0415
+        from ..benchmark.window_dataset import M4SeriesDataset                # noqa: PLC0415
         from ..evaluation.m4_metrics import (                                  # noqa: PLC0415
             evaluate_m4_dataset,
             smape as _smape,
