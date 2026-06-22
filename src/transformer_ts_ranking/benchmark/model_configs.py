@@ -84,18 +84,20 @@ _MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
         # (encoder-only default) which violates this constraint.
         "d_layers": 2,
     },
+    "scaleformer": {
+        # Default scales=[8,4,2,1] requires pred_len % coarsest_scale == 0.
+        # Long-term illness horizons [24, 36, 48, 60] violate this for scales
+        # containing 8 (36 % 8 != 0, 60 % 8 != 0).  scales=[1] disables
+        # multi-scale but makes the model compatible with any pred_len across
+        # all benchmark datasets (long-term and M4).
+        "scales": [1],
+    },
 }
 
 # M4-specific overrides applied ON TOP of _MODEL_OVERRIDES for M4 configs only.
 # These resolve structural incompatibilities between model defaults and the small
 # pred_len values used in some M4 frequency slices (Yearly=6, Weekly=13).
 _M4_MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
-    "scaleformer": {
-        # Default scales=[8,4,2,1] requires pred_len % 8 == 0.  M4 Yearly (6)
-        # and Weekly (13) violate this.  scales=[1] disables multi-scale but
-        # makes the model compatible with any pred_len.
-        "scales": [1],
-    },
     "multipatchformer": {
         # Default n_sar_steps=8 requires pred_len >= 8.  M4 Yearly (pred_len=6)
         # violates this.  Setting n_sar_steps=4 satisfies all M4 horizons (≥ 6).
