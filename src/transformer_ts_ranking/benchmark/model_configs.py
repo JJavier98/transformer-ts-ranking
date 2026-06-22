@@ -41,13 +41,21 @@ _MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "lag_llama_pretrained": {
         # Official Lag-Llama pretrained weights from HuggingFace (zero-shot).
-        # Architecture: d_model=144, 8 layers, 8 heads, SwiGLU d_ff=512, 90 lags.
-        # d_model must match the checkpoint (144); the base config default of 128
-        # would cause a state_dict size mismatch when loading weights.
+        # ALL architecture params must be overridden explicitly because
+        # build_{long_term,m4}_config injects generic defaults (d_ff=256,
+        # n_heads=4) that would be passed through filter_config_for_model and
+        # override the dataclass field defaults, causing a state_dict size
+        # mismatch.  Checkpoint shapes (from model.safetensors inspection):
+        #   embed_inputs.weight : (144, 92)  → d_model=144, input_dim=92
+        #   mlp.gate_proj.weight: (512, 144) → d_ff=512
+        #   self_attn.q_proj    : (144, 144) → n_heads flexible but 8 is correct
         "hf_repo": "time-series-foundation-models/Lag-Llama",
         "hf_filename": "model.safetensors",
         "scaling": "mean",
         "d_model": 144,
+        "d_ff": 512,
+        "n_heads": 8,
+        "n_layers": 8,
     },
     "fedformer": {
         # Default BERT-large scale would OOM on 8 GB GPU at batch_size ≥ 4.
