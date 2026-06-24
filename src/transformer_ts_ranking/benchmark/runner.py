@@ -119,37 +119,19 @@ class BenchmarkRunner:
     def run(self) -> pd.DataFrame:
         """Execute the full benchmark and return the accumulated results frame.
 
-        Returns:
-            DataFrame of all ``RunResult`` records written during this run.
-        """
-        all_records: list[dict[str, Any]] = []
+        Incremental checkpointing: the parquet is written after every
+        (model, dataset, horizon, seed) combo.  Completed combos are skipped
+        on re-entry so a job killed by a wall-time limit can be resubmitted
+        without redoing work.
 
+        Returns:
+            DataFrame of all ``RunResult`` records (new + previously written).
+        """
         if "long_term" in self.cfg.tasks:
-            records = self._run_long_term_track()
-            all_records.extend(records)
+            self._run_long_term_track()
 
         if "m4" in self.cfg.tasks:
-            records = self._run_m4_track()
-            all_records.extend(records)
-
-        if all_records:
-            frame = pd.DataFrame(all_records)
-            # Merge with any previously persisted results, then deduplicate:
-            # keep the most recent row per (model, dataset, horizon, seed, task)
-            # so that re-runs cleanly replace stale/error rows.
-            if self._parquet_path.exists():
-                existing = pd.read_parquet(self._parquet_path)
-                frame = pd.concat([existing, frame], ignore_index=True)
-            _RUN_KEY = ["model_name", "dataset_name", "horizon", "seed", "task"]
-            if "run_timestamp" in frame.columns:
-                frame = (
-                    frame
-                    .sort_values("run_timestamp", ascending=True)
-                    .drop_duplicates(subset=_RUN_KEY, keep="last")
-                    .reset_index(drop=True)
-                )
-            frame.to_parquet(self._parquet_path, index=False)
-            return frame
+            self._run_m4_track()
 
         if self._parquet_path.exists():
             return pd.read_parquet(self._parquet_path)
@@ -159,8 +141,12 @@ class BenchmarkRunner:
     # Long-term track
     # ------------------------------------------------------------------
 
-    def _run_long_term_track(self) -> list[dict[str, Any]]:
-        """Iterate all (model, dataset, horizon, seed) combinations."""
+    def _run_long_term_track(self) -> None:
+        """Iterate all (model, dataset, horizon, seed) combinations.
+
+        Already-completed (error-free) combos found in the existing parquet are
+        skipped so the job can be safely resubmitted after a wall-time timeout.
+        """
         from ..data.long_term import load_long_term_dataset
 
         manifest_paths = self._manifest_paths()
@@ -172,7 +158,7 @@ class BenchmarkRunner:
         if self.cfg.datasets:
             dataset_names = [d for d in dataset_names if d in self.cfg.datasets]
 
-        records: list[dict[str, Any]] = []
+        completed = self._load_completed_keys()
 
         for dataset_name in dataset_names:
             print(f"[long_term] Loading dataset: {dataset_name}")
@@ -203,6 +189,10 @@ class BenchmarkRunner:
                     model_cfg = filter_config_for_model(model_name, raw_cfg)
                     for seed in self.cfg.seeds:
                         tag = f"  [{model_name}] {dataset_name} h={horizon} seed={seed}"
+                        key = (model_name, dataset_name, horizon, seed, "long_term")
+                        if key in completed:
+                            print(f"{tag} [SKIP — already done]")
+                            continue
                         if self.cfg.dry_run:
                             print(f"{tag} [DRY RUN — skipped]")
                             continue
@@ -230,18 +220,21 @@ class BenchmarkRunner:
                             wandb_logger=logger,
                         )
                         self._persist_result(result)
-                        records.append(result.to_record())
+                        self._append_to_parquet(result.to_record())
+                        completed.add(key)
                         status = f"MAE={result.mae:.4f}" if result.error is None else f"ERROR: {result.error}"
                         print(f"    → {status}")
-
-        return records
 
     # ------------------------------------------------------------------
     # M4 track
     # ------------------------------------------------------------------
 
-    def _run_m4_track(self) -> list[dict[str, Any]]:
-        """Iterate all (model, frequency, seed) combinations for M4."""
+    def _run_m4_track(self) -> None:
+        """Iterate all (model, frequency, seed) combinations for M4.
+
+        Already-completed (error-free) combos found in the existing parquet are
+        skipped so the job can be safely resubmitted after a wall-time timeout.
+        """
         from ..data.m4 import load_m4_dataset
 
         manifest_paths = self._manifest_paths()
@@ -253,7 +246,7 @@ class BenchmarkRunner:
         if self.cfg.datasets:
             frequency_labels = [f for f in frequency_labels if f in self.cfg.datasets]
 
-        records: list[dict[str, Any]] = []
+        completed = self._load_completed_keys()
 
         for freq_label in frequency_labels:
             print(f"[m4] Loading frequency: {freq_label}")
@@ -276,6 +269,10 @@ class BenchmarkRunner:
                 model_cfg = filter_config_for_model(model_name, raw_cfg)
                 for seed in self.cfg.seeds:
                     tag = f"  [{model_name}] M4/{freq_label} seed={seed}"
+                    key = (model_name, freq_label, dataset.horizon, seed, "m4")
+                    if key in completed:
+                        print(f"{tag} [SKIP — already done]")
+                        continue
                     if self.cfg.dry_run:
                         print(f"{tag} [DRY RUN — skipped]")
                         continue
@@ -302,11 +299,10 @@ class BenchmarkRunner:
                         wandb_logger=logger,
                     )
                     self._persist_result(result)
-                    records.append(result.to_record())
+                    self._append_to_parquet(result.to_record())
+                    completed.add(key)
                     status = f"OWA={result.owa:.4f}" if result.error is None else f"ERROR: {result.error}"
                     print(f"    → {status}")
-
-        return records
 
     # ------------------------------------------------------------------
     # Helpers
@@ -346,8 +342,53 @@ class BenchmarkRunner:
             eligible = [m for m in eligible if m in self.cfg.models]
         return eligible
 
+    _RUN_KEY: list[str] = ["model_name", "dataset_name", "horizon", "seed", "task"]
+
+    def _load_completed_keys(self) -> set[tuple]:
+        """Return the set of (model, dataset, horizon, seed, task) tuples that
+        already have a successful (error-free) row in the parquet checkpoint.
+
+        Used to skip combos on job re-entry after a wall-time timeout.
+        Error rows are NOT skipped so they can be retried on resubmission.
+        """
+        if not self._parquet_path.exists():
+            return set()
+        df = pd.read_parquet(self._parquet_path)
+        done = df[df["error"].isna()]
+        return set(
+            zip(
+                done["model_name"],
+                done["dataset_name"],
+                done["horizon"].astype(int),
+                done["seed"].astype(int),
+                done["task"],
+            )
+        )
+
+    def _append_to_parquet(self, record: dict[str, Any]) -> None:
+        """Append one result record to the parquet checkpoint immediately.
+
+        Merges with any existing rows and deduplicates by run key, keeping the
+        most recent timestamp.  Writing after every combo ensures partial results
+        are preserved if the job is killed before finishing all combos.
+        """
+        new_row = pd.DataFrame([record])
+        if self._parquet_path.exists():
+            existing = pd.read_parquet(self._parquet_path)
+            combined = pd.concat([existing, new_row], ignore_index=True)
+        else:
+            combined = new_row
+        if "run_timestamp" in combined.columns:
+            combined = (
+                combined
+                .sort_values("run_timestamp", ascending=True)
+                .drop_duplicates(subset=self._RUN_KEY, keep="last")
+                .reset_index(drop=True)
+            )
+        combined.to_parquet(self._parquet_path, index=False)
+
     def _persist_result(self, result: RunResult) -> None:
-        """Append one run record to the JSONL epoch log and flush."""
+        """Append per-epoch log entries to the JSONL file."""
         with self._jsonl_path.open("a") as fh:
             for log_entry in result.epoch_logs:
                 fh.write(json.dumps(log_entry) + "\n")
