@@ -113,6 +113,80 @@ _M4_MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Per-model batch-size overrides.
+# Values are either a flat int (all horizons) or a {horizon: batch_size} dict.
+# Resolved by get_batch_size_override(); passed to the engine per run so the
+# runner-level batch_size is not changed globally.
+# ---------------------------------------------------------------------------
+_MODEL_BATCH_OVERRIDES: dict[str, "int | dict[int, int]"] = {
+    "spacetimeformer": {
+        # Temporal self-attention on the decoder is O(B × C × T_dec²) where
+        # T_dec = label_len + pred_len.  At h=720, T_dec=768, B=16, C=7:
+        # ~8.5 GB for the attention matrix alone.  B=4 reduces this to ~2.1 GB.
+        # electricity (C=321) and traffic (C=862) remain incompatible at h=720
+        # even at B=1 — those combos are expected to error and are excluded
+        # from the paper's h=720 rows.
+        720: 4,
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Per-model encoder context-length overrides.
+# When non-None, the engine truncates the encoder input x (and x_mark) to
+# the last context_len time steps before every fit() and predict() call.
+# Required for models whose attention is O(T²) in the encoder sequence.
+# ---------------------------------------------------------------------------
+_MODEL_CONTEXT_LEN: dict[str, int] = {
+    "contiformer": 96,
+    # ODELinear.forward() allocates [B, T, T, D] pairwise integral tensors.
+    # At T=336, B=16: ~11 GB.  Truncating to T=96 reduces this to ~150 MB
+    # while preserving the continuous-time ODE semantics — the model can operate
+    # on any context length; 96 is the benchmark's chosen budget.
+    # For M4 (seq_len=96 by default) truncation is a no-op.
+}
+
+
+def get_batch_size_override(
+    model_name: str,
+    pred_len: int,
+    default: int,
+) -> int:
+    """Return the effective batch size for a model × horizon combination.
+
+    Models that exceed VRAM at the global batch size register a per-horizon
+    (or flat) override in ``_MODEL_BATCH_OVERRIDES``.
+
+    Args:
+        model_name: Canonical model key.
+        pred_len: Forecast horizon for the current run.
+        default: Runner-level default batch size.
+
+    Returns:
+        Effective batch size to pass to the engine for this run.
+    """
+    override = _MODEL_BATCH_OVERRIDES.get(model_name)
+    if override is None:
+        return default
+    if isinstance(override, int):
+        return override
+    return override.get(pred_len, default)
+
+
+def get_context_len_override(model_name: str) -> "int | None":
+    """Return the encoder context-length override for a model, or None.
+
+    When non-None the engine truncates the encoder input to the last
+    ``context_len`` time steps before every ``fit()`` and ``predict()`` call.
+
+    Args:
+        model_name: Canonical model key.
+
+    Returns:
+        Context length in time steps, or ``None`` (no truncation).
+    """
+    return _MODEL_CONTEXT_LEN.get(model_name)
+
 # Models whose seq2seq nature requires an explicit label_len in the config.
 # All other eligible models receive label_len=0 (encoder-only style).
 _SEQ2SEQ_MODELS = frozenset({

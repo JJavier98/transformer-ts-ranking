@@ -22,7 +22,13 @@ import pandas as pd
 
 from ..configuration import load_yaml
 from .engine import BenchmarkEngine, RunResult
-from .model_configs import build_long_term_config, build_m4_config, filter_config_for_model
+from .model_configs import (
+    build_long_term_config,
+    build_m4_config,
+    filter_config_for_model,
+    get_batch_size_override,
+    get_context_len_override,
+)
 from .wandb_logger import WandbConfig, WandbLogger
 
 
@@ -218,6 +224,10 @@ class BenchmarkRunner:
                             pred_len=horizon,
                             seed=seed,
                             wandb_logger=logger,
+                            batch_size=get_batch_size_override(
+                                model_name, horizon, self.cfg.batch_size
+                            ),
+                            context_len=get_context_len_override(model_name),
                         )
                         self._persist_result(result)
                         self._append_to_parquet(result.to_record())
@@ -297,6 +307,10 @@ class BenchmarkRunner:
                         seq_len=self.cfg.m4_seq_len,
                         seed=seed,
                         wandb_logger=logger,
+                        batch_size=get_batch_size_override(
+                            model_name, dataset.horizon, self.cfg.batch_size
+                        ),
+                        context_len=get_context_len_override(model_name),
                     )
                     self._persist_result(result)
                     self._append_to_parquet(result.to_record())

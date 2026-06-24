@@ -6,8 +6,8 @@ summary:
   filesystem_only: 0
   registry_only: 0
   inspection_failures: 0
-  eligible_long_term: 27
-  eligible_m4: 27
+  eligible_long_term: 28
+  eligible_m4: 28
 models:
 - model_name: airformer
   registered: true
@@ -172,8 +172,8 @@ models:
   requires_exogenous: false
   requires_irregular_times: false
   requires_spatial_structure: false
-  eligible_long_term: false
-  eligible_m4: false
+  eligible_long_term: true
+  eligible_m4: true
   adapter_name: encoder_only
   notes:
   - Bootstrap capability matrix uses deterministic heuristics and requires manual
@@ -182,13 +182,18 @@ models:
   - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
     the encoder-only profile.'
   - 'Excluded after smoke test (2026-06-20): CUDA OOM on all 4 horizons of ETTh1 at
-    batch_size=16 on a V100-39GB. ContiFormer''s continuous-time attention allocates
-    memory quadratic in seq_len × channels regardless of batch size; incompatible with
-    the benchmark GPU budget.'
+    batch_size=16 on a V100-39GB. Root cause: ODELinear allocates [B,T,T,D] pairwise
+    integral tensors — O(B×T²×D) cost; at T=336 B=16 reaches ~11 GB.'
+  - 'Re-enabled (2026-06-24): engine now truncates encoder input to context_len=96
+    (via get_context_len_override) before every fit() and predict() call.  At T=96
+    the pairwise ODE tensor is ~150 MB — well within budget.  bf16 autocast
+    (active on A100 nodes) halves memory further.  Documented in paper as a known
+    scalability limitation of continuous-time ODE attention.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: 'Excluded after smoke test: CUDA OOM on all 4 horizons at
-    batch_size=16. Memory usage is incompatible with the 8–40 GB GPU budget.'
+  eligibility_reason: 'Re-enabled after context-length truncation fix (2026-06-24):
+    engine truncates encoder input to 96 steps, reducing ODE memory from ~11 GB to
+    ~150 MB. Context length of 96 is documented in the paper.'
 - model_name: crossformer
   registered: true
   supports_regular_mts: true

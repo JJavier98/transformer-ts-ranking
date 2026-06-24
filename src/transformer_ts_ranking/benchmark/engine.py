@@ -23,6 +23,7 @@ W&B integration:
 
 from __future__ import annotations
 
+import contextlib
 import sys
 import time
 from dataclasses import dataclass, field
@@ -233,6 +234,8 @@ class BenchmarkEngine:
         pred_len: int,
         seed: int,
         wandb_logger: WandbLogger | None = None,
+        batch_size: int | None = None,
+        context_len: int | None = None,
     ) -> RunResult:
         """Train and evaluate one model on one long-term dataset/horizon/seed.
 
@@ -244,6 +247,12 @@ class BenchmarkEngine:
             seed: Random seed (applied to Torch and NumPy).
             wandb_logger: Optional W&B logger for this run.  When ``None`` a
                 no-op logger is used so the engine needs no ``if`` guards.
+            batch_size: Override for DataLoader batch size.  When ``None``
+                uses ``self.batch_size``.  Per-model VRAM overrides are
+                resolved by the runner before calling this method.
+            context_len: Truncate encoder input to the last ``context_len``
+                time steps before ``fit()`` and ``predict()``.  Required for
+                models with O(T²) attention cost (e.g. ContiFormer).
 
         Returns:
             Fully populated ``RunResult``.
@@ -251,6 +260,7 @@ class BenchmarkEngine:
         from ..benchmark.window_dataset import LongTermWindowDataset
 
         logger = wandb_logger or WandbLogger.disabled()
+        effective_bs = batch_size if batch_size is not None else self.batch_size
 
         try:
             # _set_seed is inside the try block so that a CUDA device-side assert
@@ -279,14 +289,14 @@ class BenchmarkEngine:
 
             train_loader = DataLoader(
                 train_ds,
-                batch_size=self.batch_size,
+                batch_size=effective_bs,
                 shuffle=True,
                 num_workers=self.num_workers,
                 drop_last=False,
             )
             val_loader = DataLoader(
                 val_ds,
-                batch_size=self.batch_size,
+                batch_size=effective_bs,
                 shuffle=False,
                 num_workers=self.num_workers,
                 drop_last=False,
@@ -294,7 +304,7 @@ class BenchmarkEngine:
 
             test_loader = DataLoader(
                 test_ds,
-                batch_size=self.batch_size,
+                batch_size=effective_bs,
                 shuffle=False,
                 num_workers=self.num_workers,
                 drop_last=False,
@@ -312,6 +322,7 @@ class BenchmarkEngine:
                 seed=seed,
                 dataset_name=dataset.dataset_name,
                 logger=logger,
+                context_len=context_len,
             )
         except Exception as exc:
             err_msg = f"{type(exc).__name__}: {exc}"
@@ -342,6 +353,7 @@ class BenchmarkEngine:
         seed: int,
         dataset_name: str,
         logger: WandbLogger,
+        context_len: int | None = None,
     ) -> RunResult:
         """Execute the full training loop and test evaluation."""
         from src.interfaces.forecasting import TrainingConfig  # noqa: PLC0415
@@ -376,13 +388,15 @@ class BenchmarkEngine:
 
             # One epoch of training via the library's fit() API.
             # Passing the optimizer externally preserves optimiser state
-            # across the epoch loop.
-            model.fit(
-                self._filtered_loader(train_loader),
-                self._filtered_loader(val_loader) if val_loader else None,
-                training=training_cfg,
-                optimizer=optimizer,
-            )
+            # across the epoch loop.  bf16 autocast is active when the GPU
+            # supports it (A100/H100 only; V100 falls back to fp32 via nullcontext).
+            with self._autocast_ctx():
+                model.fit(
+                    self._filtered_loader(train_loader, context_len),
+                    self._filtered_loader(val_loader, context_len) if val_loader else None,
+                    training=training_cfg,
+                    optimizer=optimizer,
+                )
 
             epoch_time = time.perf_counter() - t_epoch_start
             total_train_time += epoch_time
@@ -432,15 +446,19 @@ class BenchmarkEngine:
         model.eval()
         model.to(self.device)
 
-        with torch.no_grad():
+        with torch.no_grad(), self._autocast_ctx():
             for batch in test_loader:
                 future_orig = batch.pop("future_orig").numpy()  # (B, pred_len, C)
                 clean_batch = _strip_future_orig(batch)
                 x = clean_batch["x"].to(self.device).float()
+                if context_len is not None and x.shape[1] > context_len:
+                    x = x[:, -context_len:, :]
                 x_mark = clean_batch.get("x_mark")
                 y_mark = clean_batch.get("y_mark")
                 if x_mark is not None:
                     x_mark = x_mark.to(self.device).float()
+                    if context_len is not None and x_mark.shape[1] > context_len:
+                        x_mark = x_mark[:, -context_len:, :]
                 if y_mark is not None:
                     y_mark = y_mark.to(self.device).float()
 
@@ -517,6 +535,8 @@ class BenchmarkEngine:
         seq_len: int,
         seed: int,
         wandb_logger: WandbLogger | None = None,
+        batch_size: int | None = None,
+        context_len: int | None = None,
     ) -> RunResult:
         """Train and evaluate one model on one M4 frequency slice.
 
@@ -527,6 +547,11 @@ class BenchmarkEngine:
             seq_len: Encoder input length.
             seed: Random seed.
             wandb_logger: Optional W&B logger for this run.
+            batch_size: Override for DataLoader batch size.  When ``None``
+                uses ``self.batch_size``.
+            context_len: Truncate encoder input to the last ``context_len``
+                time steps.  For M4 (seq_len=96 by default) this is a no-op
+                unless seq_len was raised above context_len.
 
         Returns:
             Fully populated ``RunResult`` including sMAPE, MASE, OWA.
@@ -534,6 +559,7 @@ class BenchmarkEngine:
         from ..benchmark.window_dataset import M4SeriesDataset
 
         logger = wandb_logger or WandbLogger.disabled()
+        effective_bs = batch_size if batch_size is not None else self.batch_size
 
         try:
             # _set_seed inside try so a CUDA device-side assert from a prior run
@@ -545,7 +571,7 @@ class BenchmarkEngine:
             m4_ds = M4SeriesDataset(dataset, seq_len=seq_len, label_len=label_len)
             m4_loader = DataLoader(
                 m4_ds,
-                batch_size=self.batch_size,
+                batch_size=effective_bs,
                 shuffle=True,
                 num_workers=self.num_workers,
                 drop_last=False,
@@ -561,6 +587,7 @@ class BenchmarkEngine:
                 label_len=label_len,
                 seed=seed,
                 logger=logger,
+                context_len=context_len,
             )
         except Exception as exc:
             err_msg = f"{type(exc).__name__}: {exc}"
@@ -588,6 +615,7 @@ class BenchmarkEngine:
         label_len: int,
         seed: int,
         logger: WandbLogger,
+        context_len: int | None = None,
     ) -> RunResult:
         """Full M4 training + OWA evaluation."""
         from src.interfaces.forecasting import ForecastInput, TrainingConfig  # noqa: PLC0415
@@ -628,11 +656,12 @@ class BenchmarkEngine:
 
         for epoch in range(self.epochs):
             t0 = time.perf_counter()
-            model.fit(
-                self._filtered_m4_loader(m4_loader),
-                training=training_cfg,
-                optimizer=optimizer,
-            )
+            with self._autocast_ctx():
+                model.fit(
+                    self._filtered_m4_loader(m4_loader),
+                    training=training_cfg,
+                    optimizer=optimizer,
+                )
             epoch_time = time.perf_counter() - t0
             total_train_time += epoch_time
             train_loss = model.history_["train_loss"][-1] if model.history_["train_loss"] else float("nan")
@@ -662,7 +691,7 @@ class BenchmarkEngine:
         predictions: dict[str, np.ndarray] = {}
         latencies: list[float] = []
 
-        with torch.no_grad():
+        with torch.no_grad(), self._autocast_ctx():
             for batch in DataLoader(
                 M4SeriesDataset(dataset, seq_len=seq_len, label_len=label_len),  # type: ignore[arg-type]
                 batch_size=self.batch_size,
@@ -670,6 +699,8 @@ class BenchmarkEngine:
                 collate_fn=_m4_collate_fn,
             ):
                 x = batch["x"].to(self.device).float()
+                if context_len is not None and x.shape[1] > context_len:
+                    x = x[:, -context_len:, :]
                 x_mark = batch["x_mark"].to(self.device).float()
                 y_mark = batch["y_mark"].to(self.device).float()
                 series_ids = batch["_series_id"]  # list of strings
@@ -750,11 +781,35 @@ class BenchmarkEngine:
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
 
+    def _autocast_ctx(self) -> Any:
+        """Return bf16 autocast when GPU supports it, otherwise a no-op context.
+
+        A100/H100 GPUs support bf16 natively and benefit from reduced memory and
+        faster tensor-core throughput.  V100 does not support bf16
+        (``is_bf16_supported()`` returns False) so this falls back to a no-op,
+        preserving fp32 semantics on those nodes.  bf16 does not require
+        GradScaler (same exponent range as fp32).
+        """
+        if (
+            self.device.startswith("cuda")
+            and torch.cuda.is_available()
+            and torch.cuda.is_bf16_supported()
+        ):
+            return torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+        return contextlib.nullcontext()
+
     @staticmethod
-    def _filtered_loader(loader: DataLoader | None) -> Any:
-        """Return an iterable that strips non-model keys from each batch."""
+    def _filtered_loader(loader: DataLoader | None, context_len: int | None = None) -> Any:
+        """Return an iterable that strips non-model keys from each batch.
+
+        When ``context_len`` is set, also truncates ``x`` (and ``x_mark``) to
+        the last ``context_len`` time steps.  Used for models with O(T²)
+        attention cost (e.g. ContiFormer).
+        """
         if loader is None:
             return None
+        if context_len is not None:
+            return _TruncatedLoader(loader, context_len)
         return _FilteredLoader(loader)
 
     @staticmethod
@@ -788,6 +843,38 @@ class _FilteredM4Loader:
     def __iter__(self):  # type: ignore[override]
         for batch in self._loader:
             yield {k: v for k, v in batch.items() if k not in self._M4_META}
+
+    def __len__(self) -> int:
+        return len(self._loader)
+
+
+class _TruncatedLoader:
+    """Wraps a DataLoader to truncate the encoder input to ``context_len`` steps.
+
+    Used for models whose attention is O(T²) in the encoder sequence length
+    (e.g. ContiFormer with its ODE pairwise integrals).  Strips benchmark-internal
+    metadata keys and slices ``x`` (and ``x_mark`` when present) to the last
+    ``context_len`` time steps, leaving ``y``, ``y_mark``, and ``y_full`` intact.
+    """
+
+    def __init__(self, loader: DataLoader, context_len: int) -> None:
+        """Initialise the truncated loader.
+
+        Args:
+            loader: Source DataLoader.
+            context_len: Maximum number of encoder time steps to retain.
+        """
+        self._loader = loader
+        self._context_len = context_len
+
+    def __iter__(self):  # type: ignore[override]
+        for batch in self._loader:
+            clean = _strip_future_orig(batch)
+            if "x" in clean and clean["x"].shape[1] > self._context_len:
+                clean["x"] = clean["x"][:, -self._context_len:, :]
+            if "x_mark" in clean and clean["x_mark"].shape[1] > self._context_len:
+                clean["x_mark"] = clean["x_mark"][:, -self._context_len:, :]
+            yield clean
 
     def __len__(self) -> int:
         return len(self._loader)
