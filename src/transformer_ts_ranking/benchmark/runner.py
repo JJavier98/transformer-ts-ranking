@@ -28,6 +28,7 @@ from .model_configs import (
     filter_config_for_model,
     get_batch_size_override,
     get_context_len_override,
+    is_bf16_safe,
 )
 from .wandb_logger import WandbConfig, WandbLogger
 

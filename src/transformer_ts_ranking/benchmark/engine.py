@@ -338,6 +338,10 @@ class BenchmarkEngine:
                 rmse=float("nan"),
                 error=err_msg,
             )
+        # Release cached CUDA tensors so failed model runs don't fragment
+        # the caching allocator and OOM the next model in the sequence.
+        if torch.cuda.is_available() and self.device.startswith("cuda"):
+            torch.cuda.empty_cache()
         return result
 
     def _train_and_eval_long_term(
@@ -389,8 +393,9 @@ class BenchmarkEngine:
             # One epoch of training via the library's fit() API.
             # Passing the optimizer externally preserves optimiser state
             # across the epoch loop.  bf16 autocast is active when the GPU
-            # supports it (A100/H100 only; V100 falls back to fp32 via nullcontext).
-            with self._autocast_ctx():
+            # supports it (A100/H100 only; V100 falls back to fp32 via nullcontext)
+            # and when the model is known to be bf16-compatible.
+            with self._autocast_ctx(model_name):
                 model.fit(
                     self._filtered_loader(train_loader, context_len),
                     self._filtered_loader(val_loader, context_len) if val_loader else None,
@@ -446,7 +451,7 @@ class BenchmarkEngine:
         model.eval()
         model.to(self.device)
 
-        with torch.no_grad(), self._autocast_ctx():
+        with torch.no_grad(), self._autocast_ctx(model_name):
             for batch in test_loader:
                 future_orig = batch.pop("future_orig").numpy()  # (B, pred_len, C)
                 clean_batch = _strip_future_orig(batch)
@@ -603,6 +608,8 @@ class BenchmarkEngine:
                 rmse=float("nan"),
                 error=err_msg,
             )
+        if torch.cuda.is_available() and self.device.startswith("cuda"):
+            torch.cuda.empty_cache()
         return result
 
     def _train_and_eval_m4(
@@ -656,7 +663,7 @@ class BenchmarkEngine:
 
         for epoch in range(self.epochs):
             t0 = time.perf_counter()
-            with self._autocast_ctx():
+            with self._autocast_ctx(model_name):
                 model.fit(
                     self._filtered_m4_loader(m4_loader),
                     training=training_cfg,
@@ -691,7 +698,7 @@ class BenchmarkEngine:
         predictions: dict[str, np.ndarray] = {}
         latencies: list[float] = []
 
-        with torch.no_grad(), self._autocast_ctx():
+        with torch.no_grad(), self._autocast_ctx(model_name):
             for batch in DataLoader(
                 M4SeriesDataset(dataset, seq_len=seq_len, label_len=label_len),  # type: ignore[arg-type]
                 batch_size=self.batch_size,
@@ -781,19 +788,23 @@ class BenchmarkEngine:
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
 
-    def _autocast_ctx(self) -> Any:
-        """Return bf16 autocast when GPU supports it, otherwise a no-op context.
+    def _autocast_ctx(self, model_name: str | None = None) -> Any:
+        """Return bf16 autocast when GPU and model support it, else a no-op.
 
-        A100/H100 GPUs support bf16 natively and benefit from reduced memory and
-        faster tensor-core throughput.  V100 does not support bf16
-        (``is_bf16_supported()`` returns False) so this falls back to a no-op,
-        preserving fp32 semantics on those nodes.  bf16 does not require
-        GradScaler (same exponent range as fp32).
+        A100/H100 GPUs support bf16 natively (``is_bf16_supported()`` True) and
+        benefit from half-precision activations and tensor-core throughput.
+        V100 does not support bf16 → no-op, preserving fp32 on those nodes.
+        Models in ``_MODEL_NO_BF16`` also get a no-op: they use FFT, stochastic
+        ops, or custom kernels that raise TypeError/RuntimeError in bf16 mode.
+        bf16 does not require GradScaler (same exponent range as fp32).
         """
+        from .model_configs import is_bf16_safe  # noqa: PLC0415
+
         if (
             self.device.startswith("cuda")
             and torch.cuda.is_available()
             and torch.cuda.is_bf16_supported()
+            and (model_name is None or is_bf16_safe(model_name))
         ):
             return torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
         return contextlib.nullcontext()

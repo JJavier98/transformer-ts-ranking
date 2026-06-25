@@ -381,12 +381,19 @@ All models run in **float32** by default (the engine calls `.float()` on input t
 before every `fit()` and `predict()` call).  On nodes with A100 GPUs that support bf16
 natively (`torch.cuda.is_bf16_supported() == True`), the engine applies
 `torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)` as a context manager
-around every `model.fit()` and `model.predict()` call.  This halves the peak memory
-for activation tensors and speeds up matrix multiplications using bf16 tensor cores,
-while keeping parameters in fp32 (AMP standard behaviour).  On V100 nodes
-(`is_bf16_supported() == False`) the autocast is a no-op and execution is purely fp32.
-The use of bf16 autocast is uniform across all eligible models and is documented as
-part of the benchmark setup in the paper.
+around every `model.fit()` and `model.predict()` call for **bf16-compatible models**.
+This halves peak activation memory and speeds up matrix multiplications via bf16 tensor
+cores, while keeping parameters in fp32 (standard AMP behaviour).
+
+**bf16-incompatible models (run in fp32 even on A100):** `airformer`, `autoformer`,
+`crossformer`, `earthformer`, `etsformer`, `fedformer`, `pathformer`.  These use
+`torch.fft.*` (AutoCorrelation, ETSFormer, FEDformer, Pathformer), stochastic latent
+distributions (`airformer`), or custom attention kernels (`crossformer`, `earthformer`)
+that raise `TypeError: Got unsupported ScalarType BFloat16` or `RuntimeError:
+Unsupported dtype BFloat16` under autocast.  Excluded via `_MODEL_NO_BF16` in
+`model_configs.py`.
+
+On V100 nodes (`is_bf16_supported() == False`), all models run in fp32.
 
 ### Seq2seq vs encoder-only split
 

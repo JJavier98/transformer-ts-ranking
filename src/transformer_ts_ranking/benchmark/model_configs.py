@@ -114,6 +114,49 @@ _M4_MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
 }
 
 # ---------------------------------------------------------------------------
+# Models that do NOT support bfloat16 in PyTorch autocast.
+# These models use operations (FFT, stochastic distributions, custom CUDA
+# kernels) that raise TypeError/RuntimeError when run in bf16 mode.  The
+# engine's _autocast_ctx() skips autocast for these models and runs fp32.
+#
+# Confirmed failures on A100 with torch.amp.autocast(bf16):
+#   autoformer     — AutoCorrelation via torch.fft.rfft → incompatible
+#   etsformer      — ExponentialSmoothing via torch.fft   → incompatible
+#   fedformer      — FEDformer frequency components via torch.fft → incompatible
+#   pathformer     — Pathformer encoder uses torch.fft.rfft → incompatible
+#   airformer      — stochastic encoder uses torch.distributions.Normal
+#                    (log_prob ops require float32) → TypeError: BFloat16
+#   crossformer    — some cross-segment attention op → TypeError: BFloat16
+#   earthformer    — cuboid attention internal op  → TypeError: BFloat16
+# ---------------------------------------------------------------------------
+_MODEL_NO_BF16: frozenset[str] = frozenset({
+    "airformer",
+    "autoformer",
+    "crossformer",
+    "earthformer",
+    "etsformer",
+    "fedformer",
+    "pathformer",
+})
+
+
+def is_bf16_safe(model_name: str) -> bool:
+    """Return True if the model can run inside torch.amp.autocast(bf16).
+
+    Models that use FFT, stochastic distributions, or custom CUDA kernels
+    that are not bf16-compatible are excluded.  All others can benefit from
+    bf16 tensor-core throughput on A100/H100 GPUs.
+
+    Args:
+        model_name: Canonical model key.
+
+    Returns:
+        ``False`` for models known to fail with bf16 autocast; ``True`` otherwise.
+    """
+    return model_name not in _MODEL_NO_BF16
+
+
+# ---------------------------------------------------------------------------
 # Per-model batch-size overrides.
 # Values are either a flat int (all horizons) or a {horizon: batch_size} dict.
 # Resolved by get_batch_size_override(); passed to the engine per run so the
