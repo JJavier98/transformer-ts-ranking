@@ -17,7 +17,7 @@ Launch examples::
     # Override single model / dataset from CLI
     conda run -n torch_env python scripts/launch_benchmark.py \\
         training=smoke experiment=long_term wandb=disabled \\
-        training.models=[itransformer,patchtst] experiment.datasets=[ETTh1]
+        experiment.models=[itransformer,patchtst] experiment.datasets=[ETTh1]
 
     # Hydra multi-run sweep across horizons
     conda run -n torch_env python scripts/launch_benchmark.py --multirun \\
