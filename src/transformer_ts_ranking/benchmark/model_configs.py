@@ -163,15 +163,18 @@ def is_bf16_safe(model_name: str) -> bool:
 # runner-level batch_size is not changed globally.
 # ---------------------------------------------------------------------------
 _MODEL_BATCH_OVERRIDES: dict[str, "int | dict[int, int]"] = {
-    "spacetimeformer": {
-        # Temporal self-attention on the decoder is O(B × C × T_dec²) where
-        # T_dec = label_len + pred_len.  At h=720, T_dec=768, B=16, C=7:
-        # ~8.5 GB for the attention matrix alone.  B=4 reduces this to ~2.1 GB.
-        # electricity (C=321) and traffic (C=862) remain incompatible at h=720
-        # even at B=1 — those combos are expected to error and are excluded
-        # from the paper's h=720 rows.
-        720: 4,
-    },
+    "spacetimeformer": 4,
+    # Decoder attention has TWO quadratic terms:
+    #   temporal: B × C × H × T_dec² × 4 bytes
+    #   spatial:  B × T_dec × H × C² × 4 bytes
+    # At default B=16 these exceed 40 GB for:
+    #   - any dataset at h=720 (T_dec=768, even C=7: 8.5 GB temporal)
+    #   - electricity (C=321) at h≥96 (temporal: 3.4 GB, spatial: 7.6 GB at h=96)
+    #   - traffic (C=862) at all horizons (spatial alone ~55 GB at h=96, B=16)
+    # B=4 keeps small-channel datasets (C≤21) under 3.5 GB total at all horizons.
+    # For electricity it rescues h=96 (5.5 GB), h=192 (11.1 GB), h=336 (22.2 GB);
+    # h=720 still OOMs (68.7 GB).  Traffic OOMs at all horizons even at B=1.
+    # Those combos produce error rows in the parquet and are excluded from the paper.
 }
 
 # ---------------------------------------------------------------------------
@@ -246,6 +249,11 @@ _SEQ2SEQ_MODELS = frozenset({
     "reformer",
     "scaleformer",
     "spacetimeformer",
+    "tft",
+    # TFT uses label_len in 10 places (batch_y[:, :self.label_len, :],
+    # x_mark_dec[:, c.label_len:, :], etc.).  Without this entry label_len=0
+    # and Python's x[:, -0:, :] returns the full encoder sequence (since -0==0),
+    # feeding the wrong decoder context and silently corrupting TFT outputs.
     "transformer",
 })
 

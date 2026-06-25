@@ -315,18 +315,19 @@ data-driven from these dicts and the two accessor functions
 ### `spacetimeformer`
 
 - **Family:** Seq2seq (factorized space-time attention over all variables and time).
-- **OOM at h=720 (small-channel datasets):** The decoder temporal self-attention has
-  complexity O(B × C × T_dec²) where T_dec = label_len + pred_len.  At h=720,
-  T_dec=768, B=16, C=7 (e.g. ETTh1): ~8.5 GB.
-  **Fix:** `_MODEL_BATCH_OVERRIDES["spacetimeformer"][720] = 4`.  At B=4 the temporal
-  attention drops to ~2.1 GB — feasible on 40 GB A100.
-- **Fundamental incompatibility (high-channel datasets at h=720):**
-  The spatial attention has complexity O(B × T_dec × C²).  For electricity (C=321)
-  and traffic (C=862), even at B=1 and h=720, spatial attention exceeds available
-  VRAM on any current benchmark GPU.  These combinations are marked N/A in the
-  paper's h=720 rows.
-- **Positional embedding fix (already applied):** Default `max_seq_len=512` is too
-  small for h=720 (decoder indexed up to 768), causing a CUDA index out-of-bounds.
+- **Dual quadratic memory:** The decoder has TWO quadratic attention terms:
+  - Temporal: O(B × C × H × T_dec²) — grows with horizon squared.
+  - Spatial:  O(B × T_dec × H × C²) — grows with channel count squared.
+  At B=16, C=7, h=720 (T_dec=768) the temporal term alone is ~8.5 GB.
+- **Global batch-size override — B=4 for all horizons:**
+  `_MODEL_BATCH_OVERRIDES["spacetimeformer"] = 4` (flat int, applies at all horizons).
+  At B=4, small-channel datasets (C≤21) stay under 3.5 GB total.
+  For electricity (C=321): h=96 → 5.5 GB ✓, h=192 → 11.1 GB ✓, h=336 → 22.2 GB ✓,
+  h=720 → 68.7 GB ✗ (OOM, error row, N/A in paper).
+  For traffic (C=862): spatial term alone exceeds 40 GB at ALL horizons even at B=1 —
+  all four traffic rows are N/A for spacetimeformer.
+- **Positional embedding fix (applied):** Default `max_seq_len=512` causes a CUDA
+  index out-of-bounds for h=720 (decoder indexed up to T_dec=768).
   `_MODEL_OVERRIDES["spacetimeformer"]["max_seq_len"] = 1024` prevents this.
 - **Config:** Uses `label_len` (seq2seq family).
 
@@ -339,7 +340,11 @@ data-driven from these dicts and the two accessor functions
 - **Group B (predict kwargs):** Requires `x_mark_enc`, `x_mark_dec`, `x_dec`.
   The base class auto-builds `x_dec` from `label_len` + zeros when `label_len > 0`.
   Always pass `x_mark` and `y_mark` in `ForecastInput`.
-- **Config:** Uses `label_len` (seq2seq family).
+- **Config:** Uses `label_len` (seq2seq family).  **`tft` is explicitly listed in
+  `_SEQ2SEQ_MODELS`.**  Without this, `label_len=0` is passed and Python's
+  `batch_y[:, -0:, :]` (since −0 == 0) returns the full encoder sequence, silently
+  corrupting the decoder context.  The TFT source accesses `label_len` in at least
+  10 places (`batch_y[:, :self.label_len, :]`, `x_mark_dec[:, c.label_len:, :]`, etc.).
 
 ---
 
