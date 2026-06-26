@@ -233,6 +233,15 @@ data-driven from these dicts and the two accessor functions
   requires).  Verified: `missing_keys=[], unexpected_keys=[]`.
 - **Correct architecture:** `d_model=144, d_ff=512, n_heads=8, n_layers=8, input_dim=92`.
   The `embed_inputs.weight` shape `(144, 92)` confirms `input_dim=92` (92 Lag features).
+- **`_build_lag_features` shape bug (patched at runtime):** The library method calls
+  `loc.expand(B, T, 1)` where `loc` has shape `(B, 1)` (2-D).  PyTorch auto-prepends a
+  singleton when the target rank is higher, turning `(B, 1)` into `(1, B, 1)`.  Expanding
+  dim-1 from B to T then fails: `"expanded size (T) must match existing size (B)"` whenever
+  `batch_size ≠ seq_len` (always true in the benchmark: B=16, T=96 or 336).
+  **Fix:** instance-level monkey-patch in `_MODEL_PATCHES["lag_llama_pretrained"]`
+  (model_configs.py).  Inserts `.unsqueeze(1)` before the expand: `(B,1)→(B,1,1)→(B,T,1)`.
+  Applied by `patch_model_instance()` in the engine right after `create_model()`.
+  Library source is NOT modified.
 - **Inference:** Autoregressive — same slowdown as `lag_llama`.  Dedicated SBATCH jobs.
 - **Config override:** `hf_repo`, `hf_filename`, `scaling="mean"`, plus all architecture
   params explicitly (see above).

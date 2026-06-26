@@ -35,6 +35,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+from .model_configs import patch_model_instance  # noqa: TID252
 from .wandb_logger import WandbLogger  # noqa: TID252
 
 # The library submodule is added to sys.path by runner.py / the CLI shim.
@@ -365,6 +366,7 @@ class BenchmarkEngine:
 
         model = create_model(model_name, config=model_config)
         model.to(self.device)
+        patch_model_instance(model_name, model)
 
         # Inject dataset scaler for zero-shot pretrained models so they can
         # inverse-scale the benchmark's StandardScaler inputs before passing
@@ -636,6 +638,7 @@ class BenchmarkEngine:
 
         model = create_model(model_name, config=model_config)
         model.to(self.device)
+        patch_model_instance(model_name, model)
 
         # M4 datasets are univariate (enc_in=1); no scaler to inject, but flag
         # the model so the predict() call can identify it as zero-shot.

@@ -19,10 +19,17 @@ Frequency note — ``freq`` in all configs is fixed to ``'h'`` (4 time features)
 The long-term and M4 loaders both produce exactly 4 time features regardless of
 dataset frequency, matching FREQ_MAP['h']=4 used by TimeFeatureEmbedding.  Passing
 the actual dataset frequency (e.g. 'w'→2, 't'→5) would cause a shape mismatch.
+
+Runtime patches (``_MODEL_PATCHES`` / ``patch_model_instance``):
+  Bug fixes that cannot live in the library source are applied as instance-level
+  monkey-patches right after ``create_model()`` returns.  The dispatch dict
+  ``_MODEL_PATCHES`` maps model_name → callable(model) so neither the engine nor
+  the runner contains any ``if model_name ==`` branches.
 """
 
 from __future__ import annotations
 
+import types
 from typing import Any
 
 
@@ -409,3 +416,80 @@ def build_m4_config(
     config.update(_MODEL_OVERRIDES.get(model_name, {}))
     config.update(_M4_MODEL_OVERRIDES.get(model_name, {}))
     return config
+
+
+# ---------------------------------------------------------------------------
+# Runtime model-instance patches.
+#
+# Some library bugs cannot be fixed by config overrides — they live inside
+# private methods of the model class.  Since the library is a read-only
+# submodule we apply instance-level monkey-patches immediately after
+# ``create_model()`` returns, before the model is used for training or
+# inference.
+#
+# Each entry maps a model_name → callable(model_instance) that modifies the
+# instance in-place.  The dispatch is purely data-driven so neither the
+# engine nor the runner contains ``if model_name ==`` branches.
+# ---------------------------------------------------------------------------
+
+def _patch_lag_llama_pretrained(model: Any) -> None:
+    """Fix _build_lag_features: loc/scale arrive as (B, 1), not (B, 1, 1).
+
+    The library calls ``loc.expand(B, T, 1)`` on a 2-D tensor.  PyTorch
+    prepends a singleton when the target rank is higher, turning (B, 1)
+    into (1, B, 1), then fails to expand dim-1 from B to T because B != T
+    (error: "expanded size (T) must match existing size (B)").
+
+    Fix: insert ``unsqueeze(1)`` so the tensor is (B, 1, 1) before the
+    expand, which then correctly yields (B, T, 1).
+
+    This is an instance-level monkey-patch — the source file is not modified.
+    """
+    import torch as _torch
+
+    def _fixed_build_lag_features(
+        self: Any,
+        ctx: "_torch.Tensor",
+        loc: "_torch.Tensor",
+        scale: "_torch.Tensor",
+    ) -> "_torch.Tensor":
+        B, T = ctx.shape
+        dev = ctx.device
+        lag_features = []
+        for lag in self._lags_seq:
+            if lag >= T:
+                lag_features.append(_torch.zeros(B, T, device=dev, dtype=ctx.dtype))
+            else:
+                padded = _torch.cat(
+                    [_torch.zeros(B, lag, device=dev, dtype=ctx.dtype), ctx[:, :T - lag]],
+                    dim=1,
+                )
+                lag_features.append(padded)
+        lag_tensor = _torch.stack(lag_features, dim=-1)          # (B, T, 90)
+        # unsqueeze(1): (B,1) → (B,1,1) so expand(B,T,1) works correctly.
+        log_loc   = _torch.log(loc.abs() + 1.0).unsqueeze(1).expand(B, T, 1)
+        log_scale = _torch.log(scale + 1e-8).unsqueeze(1).expand(B, T, 1)
+        return _torch.cat([lag_tensor, log_loc, log_scale], dim=-1)  # (B, T, 92)
+
+    model._build_lag_features = types.MethodType(_fixed_build_lag_features, model)
+
+
+# Map model_name → patch callable.  Applied by patch_model_instance() in the engine.
+_MODEL_PATCHES: dict[str, Any] = {
+    "lag_llama_pretrained": _patch_lag_llama_pretrained,
+}
+
+
+def patch_model_instance(model_name: str, model: Any) -> None:
+    """Apply known runtime patches to a freshly created model instance.
+
+    Called by the engine immediately after ``create_model()`` so every run
+    benefits from the fix without any ``if model_name ==`` in the engine.
+
+    Args:
+        model_name: Canonical model key.
+        model: Model instance returned by ``create_model()``.
+    """
+    patcher = _MODEL_PATCHES.get(model_name)
+    if patcher is not None:
+        patcher(model)
