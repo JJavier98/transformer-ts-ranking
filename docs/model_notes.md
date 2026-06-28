@@ -399,13 +399,28 @@ around every `model.fit()` and `model.predict()` call for **bf16-compatible mode
 This halves peak activation memory and speeds up matrix multiplications via bf16 tensor
 cores, while keeping parameters in fp32 (standard AMP behaviour).
 
-**bf16-incompatible models (run in fp32 even on A100):** `airformer`, `autoformer`,
-`crossformer`, `earthformer`, `etsformer`, `fedformer`, `pathformer`.  These use
-`torch.fft.*` (AutoCorrelation, ETSFormer, FEDformer, Pathformer), stochastic latent
-distributions (`airformer`), or custom attention kernels (`crossformer`, `earthformer`)
-that raise `TypeError: Got unsupported ScalarType BFloat16` or `RuntimeError:
-Unsupported dtype BFloat16` under autocast.  Excluded via `_MODEL_NO_BF16` in
-`model_configs.py`.
+**bf16-incompatible models (run in fp32 even on A100) — 14 models total:**
+
+| Group | Models | Root cause |
+|-------|--------|-----------|
+| FFT ops | `autoformer`, `etsformer`, `fedformer`, `pathformer` | `torch.fft.rfft` does not support bf16 |
+| Stochastic distributions | `airformer` | `Normal.log_prob` requires float32 |
+| Custom attention kernels | `crossformer`, `earthformer`, `informer`, `pyraformer`, `reformer`, `spacetimeformer`, `triformer` | Internal CUDA kernels raise `TypeError: Got unsupported ScalarType BFloat16` |
+| Encoder-decoder decoder path | `transformer`, `tft` | Cross-attention / GRN-LSTM gating raises `TypeError: BFloat16` under autocast |
+
+All raise `TypeError: Got unsupported ScalarType BFloat16` under
+`torch.amp.autocast(bf16)` on A100 with PyTorch 2.5.1+cu124.  Excluded via
+`_MODEL_NO_BF16` in `model_configs.py`.
+
+**Cascade OOM from bf16 crashes:** when a bf16-incompatible model crashes
+mid-forward pass, the library commonly stores the optimizer on `self`
+(`self._optimizer = optimizer`), creating a reference cycle
+`model → optimizer → params → model` that CPython's reference counter cannot
+collect immediately.  After many sequential bf16 failures (7 models × 4
+horizons = 28 crashes) the allocator accumulates ~38 GiB of parameter +
+activation tensors even though no single model is still "in scope".  The
+engine now calls `gc.collect()` before `torch.cuda.empty_cache()` after every
+failed run to break cycles before releasing cached blocks.
 
 On V100 nodes (`is_bf16_supported() == False`), all models run in fp32.
 
