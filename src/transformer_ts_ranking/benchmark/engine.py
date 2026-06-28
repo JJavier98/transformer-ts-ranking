@@ -24,6 +24,7 @@ W&B integration:
 from __future__ import annotations
 
 import contextlib
+import gc
 import sys
 import time
 from dataclasses import dataclass, field
@@ -339,8 +340,11 @@ class BenchmarkEngine:
                 rmse=float("nan"),
                 error=err_msg,
             )
-        # Release cached CUDA tensors so failed model runs don't fragment
-        # the caching allocator and OOM the next model in the sequence.
+        # Break any reference cycles in the failed model (optimizer stored on
+        # self creates model → optimizer → params → model cycles that CPython's
+        # reference counter cannot collect) and release cached CUDA tensors so
+        # failed model runs don't fragment the allocator and OOM the next run.
+        gc.collect()
         if torch.cuda.is_available() and self.device.startswith("cuda"):
             torch.cuda.empty_cache()
         return result
@@ -610,6 +614,7 @@ class BenchmarkEngine:
                 rmse=float("nan"),
                 error=err_msg,
             )
+        gc.collect()
         if torch.cuda.is_available() and self.device.startswith("cuda"):
             torch.cuda.empty_cache()
         return result

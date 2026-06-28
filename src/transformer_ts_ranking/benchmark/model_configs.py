@@ -123,20 +123,42 @@ _M4_MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # Models that do NOT support bfloat16 in PyTorch autocast.
 # These models use operations (FFT, stochastic distributions, custom CUDA
-# kernels) that raise TypeError/RuntimeError when run in bf16 mode.  The
-# engine's _autocast_ctx() skips autocast for these models and runs fp32.
+# kernels, or legacy integer indices) that raise TypeError/RuntimeError when
+# run in bf16 mode.  The engine's _autocast_ctx() skips autocast for these
+# models and runs fp32.
 #
-# Confirmed failures on A100 with torch.amp.autocast(bf16):
-#   autoformer     — AutoCorrelation via torch.fft.rfft → incompatible
-#   etsformer      — ExponentialSmoothing via torch.fft   → incompatible
-#   fedformer      — FEDformer frequency components via torch.fft → incompatible
-#   pathformer     — Pathformer encoder uses torch.fft.rfft → incompatible
-#   airformer      — stochastic encoder uses torch.distributions.Normal
-#                    (log_prob ops require float32) → TypeError: BFloat16
-#   crossformer    — some cross-segment attention op → TypeError: BFloat16
-#   earthformer    — cuboid attention internal op  → TypeError: BFloat16
+# Confirmed failures on A100 with torch.amp.autocast(bf16) and
+# PyTorch 2.5.1+cu124, all raising TypeError: Got unsupported ScalarType
+# BFloat16 (or RuntimeError for FFT models):
+#
+#   Group 1 — FFT operations (torch.fft.rfft does not support bf16):
+#     autoformer    — AutoCorrelation layer via torch.fft.rfft
+#     etsformer     — ExponentialSmoothing via torch.fft
+#     fedformer     — FEDformer spectral mixing via torch.fft
+#     pathformer    — patch-wise FFT in PatchEncoder
+#
+#   Group 2 — Stochastic / distribution ops (require float32 precision):
+#     airformer     — Normal distribution log_prob in stochastic encoder
+#
+#   Group 3 — Custom attention ops incompatible with bf16 kernels:
+#     crossformer   — cross-segment router attention internal op
+#     earthformer   — cuboid self-attention internal op
+#     informer      — ProbSparse attention (topk + cumsum path)
+#     pyraformer    — CSCM pyramidal convolution + local attention
+#     reformer      — LSH (Locality-Sensitive Hashing) attention bucket ops
+#     spacetimeformer — factorised space-time attention (multi-head path)
+#     triformer     — triangular attention patch ops
+#
+#   Group 4 — Encoder-decoder models with non-bf16-compatible decoder inputs:
+#     transformer   — vanilla enc-dec: decoder cross-attention raises BFloat16
+#     tft           — Temporal Fusion Transformer: GRN / LSTM gating path
+#
+# Note: pyraformer, transformer, tft, spacetimeformer also belong to Group B
+# (require x_mark_dec / x_dec via ForecastInput) — the dtype mismatch between
+# fp32 time-mark inputs and bf16 activations may be a contributing factor.
 # ---------------------------------------------------------------------------
 _MODEL_NO_BF16: frozenset[str] = frozenset({
+    # Group 1 — FFT
     "airformer",
     "autoformer",
     "crossformer",
@@ -144,6 +166,15 @@ _MODEL_NO_BF16: frozenset[str] = frozenset({
     "etsformer",
     "fedformer",
     "pathformer",
+    # Group 3 — custom attention ops
+    "informer",
+    "pyraformer",
+    "reformer",
+    "spacetimeformer",
+    "triformer",
+    # Group 4 — encoder-decoder with bf16-incompatible decoder path
+    "transformer",
+    "tft",
 })
 
 

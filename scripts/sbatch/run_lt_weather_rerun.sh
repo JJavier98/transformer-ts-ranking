@@ -8,7 +8,7 @@
 #
 # This script uses the current code with:
 #   - Incremental checkpoint: parquet written after EVERY (model, horizon, seed) combo.
-#   - bf16 autocast: enabled on A100/H100 for compatible models (7 models excluded).
+#   - bf16 autocast: enabled on A100/H100 for compatible models (14 models excluded).
 #   - Batch-size overrides: spacetimeformer uses B=4 at ALL horizons.
 #   - Context-length truncation: contiformer capped at T=96.
 #   - TFT fix: 'tft' now in _SEQ2SEQ_MODELS (label_len passed correctly).
