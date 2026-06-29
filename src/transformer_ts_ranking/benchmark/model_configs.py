@@ -201,6 +201,14 @@ def is_bf16_safe(model_name: str) -> bool:
 # runner-level batch_size is not changed globally.
 # ---------------------------------------------------------------------------
 _MODEL_BATCH_OVERRIDES: dict[str, "int | dict[int, int]"] = {
+    "contiformer": 4,
+    # ContiFormer's ODE solver retains a [B, T, T, D] pairwise-integral tensor
+    # per function evaluation for the backward pass.  At B=16, T=96, fp32 the
+    # retained graph exceeds 40 GB and OOMs on both A100 (40 GB) and V100
+    # (32 GB).  The _MODEL_CONTEXT_LEN=96 cap does NOT help in long-term because
+    # the global seq_len is already 96 (the truncation is a no-op there), so the
+    # batch size is the only effective lever.  B=4 brings the retained graph to
+    # ~10 GB, fitting comfortably on both node classes in fp32.
     "spacetimeformer": 4,
     # Decoder attention has TWO quadratic terms:
     #   temporal: B × C × H × T_dec² × 4 bytes
@@ -224,10 +232,10 @@ _MODEL_BATCH_OVERRIDES: dict[str, "int | dict[int, int]"] = {
 _MODEL_CONTEXT_LEN: dict[str, int] = {
     "contiformer": 96,
     # ODELinear.forward() allocates [B, T, T, D] pairwise integral tensors.
-    # At T=336, B=16: ~11 GB.  Truncating to T=96 reduces this to ~150 MB
-    # while preserving the continuous-time ODE semantics — the model can operate
-    # on any context length; 96 is the benchmark's chosen budget.
-    # For M4 (seq_len=96 by default) truncation is a no-op.
+    # This cap only bites when the encoder input is longer than 96 (e.g. an M4
+    # slice with seq_len>96).  In the long-term track seq_len is already 96, so
+    # truncation is a no-op and the OOM is controlled by the B=4 batch override
+    # above instead.  96 is the benchmark's chosen context budget.
 }
 
 
