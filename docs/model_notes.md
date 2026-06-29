@@ -422,7 +422,21 @@ activation tensors even though no single model is still "in scope".  The
 engine now calls `gc.collect()` before `torch.cuda.empty_cache()` after every
 failed run to break cycles before releasing cached blocks.
 
-On V100 nodes (`is_bf16_supported() == False`), all models run in fp32.
+**bf16 is gated on real compute capability, not `is_bf16_supported()`.** In
+PyTorch ≥ 2.x, `torch.cuda.is_bf16_supported()` defaults to
+`including_emulation=True` and returns **True on a V100** (sm_70) because a
+bf16 *tensor* can be allocated there — even though Volta has no bf16 tensor
+cores. Using that flag would silently run V100 jobs in *emulated* bf16 (slower
+than fp32, no memory saving, bf16-rounded numerics) and crash the
+unsupported-kernel models. The engine therefore gates bf16 on
+`torch.cuda.get_device_capability()[0] >= 8` (Ampere+). Consequences:
+
+- **A100 / H100 (sm_80+):** bf16-safe models use real bf16; the 14
+  `_MODEL_NO_BF16` models run fp32.
+- **V100 (sm_70):** *all* models run true fp32 — including the 14 listed
+  models, which run fine in fp32. (This is why the dgx1 shards that ran under
+  the old `is_bf16_supported()` gate show bf16 errors for those models: bf16
+  emulation was incorrectly enabled on Volta.)
 
 ### Seq2seq vs encoder-only split
 

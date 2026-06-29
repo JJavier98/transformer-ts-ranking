@@ -799,19 +799,27 @@ class BenchmarkEngine:
     def _autocast_ctx(self, model_name: str | None = None) -> Any:
         """Return bf16 autocast when GPU and model support it, else a no-op.
 
-        A100/H100 GPUs support bf16 natively (``is_bf16_supported()`` True) and
-        benefit from half-precision activations and tensor-core throughput.
-        V100 does not support bf16 → no-op, preserving fp32 on those nodes.
-        Models in ``_MODEL_NO_BF16`` also get a no-op: they use FFT, stochastic
-        ops, or custom kernels that raise TypeError/RuntimeError in bf16 mode.
-        bf16 does not require GradScaler (same exponent range as fp32).
+        bf16 is gated on the GPU's *real* compute capability (Ampere+, sm_80,
+        i.e. ``major >= 8``), NOT on ``torch.cuda.is_bf16_supported()``.  The
+        latter defaults to ``including_emulation=True`` in PyTorch >= 2.x and
+        returns **True on a V100** (sm_70) because a bf16 *tensor* can be
+        created there — even though Volta has no bf16 tensor cores and many
+        kernels raise ``TypeError: Got unsupported ScalarType BFloat16``.
+        Relying on it would (a) crash the unsupported-kernel models on V100 and
+        (b) run the rest in *emulated* bf16: no speed-up, no memory saving, and
+        bf16-rounded numerics.  Gating on ``major >= 8`` keeps V100 in true
+        fp32 and reserves bf16 for A100/H100 where it is genuinely accelerated.
+
+        Models in ``_MODEL_NO_BF16`` also get a no-op even on Ampere+: they use
+        FFT, stochastic ops, or custom kernels that raise TypeError/RuntimeError
+        in bf16 mode.  bf16 needs no GradScaler (same exponent range as fp32).
         """
         from .model_configs import is_bf16_safe  # noqa: PLC0415
 
         if (
             self.device.startswith("cuda")
             and torch.cuda.is_available()
-            and torch.cuda.is_bf16_supported()
+            and torch.cuda.get_device_capability()[0] >= 8  # Ampere+ (real bf16)
             and (model_name is None or is_bf16_safe(model_name))
         ):
             return torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
