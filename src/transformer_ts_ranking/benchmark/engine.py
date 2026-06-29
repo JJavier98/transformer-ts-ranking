@@ -88,6 +88,12 @@ class RunResult:
     # Foundation model flag: HuggingFace model ID when pretrained, else None.
     pretrained_weights: str | None = None
 
+    # Numerical precision the run actually executed in: "bf16" (Ampere+ autocast)
+    # or "fp32".  Recorded per row so the benchmark is auditable and so shards
+    # run on different GPUs can be checked for precision consistency before
+    # being ranked together.
+    precision: str = "fp32"
+
     # ISO-8601 UTC timestamp of when this run completed.
     # Used to deduplicate when the same (model, dataset, horizon, seed) is
     # re-run: keep the row with the latest run_timestamp.
@@ -123,6 +129,7 @@ class RunResult:
             "stopped_early": self.stopped_early,
             "error": self.error,
             "pretrained_weights": self.pretrained_weights,
+            "precision": self.precision,
             "run_timestamp": self.run_timestamp,
         }
 
@@ -340,6 +347,8 @@ class BenchmarkEngine:
                 rmse=float("nan"),
                 error=err_msg,
             )
+        # Record the precision this run actually executed in (auditability).
+        result.precision = self._precision_label(model_name)
         # Break any reference cycles in the failed model (optimizer stored on
         # self creates model → optimizer → params → model cycles that CPython's
         # reference counter cannot collect) and release cached CUDA tensors so
@@ -614,6 +623,7 @@ class BenchmarkEngine:
                 rmse=float("nan"),
                 error=err_msg,
             )
+        result.precision = self._precision_label(model_name)
         gc.collect()
         if torch.cuda.is_available() and self.device.startswith("cuda"):
             torch.cuda.empty_cache()
@@ -795,6 +805,24 @@ class BenchmarkEngine:
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
+
+    def _precision_label(self, model_name: str | None = None) -> str:
+        """Return ``"bf16"`` if this run uses bf16 autocast, else ``"fp32"``.
+
+        Mirrors the gating logic of :meth:`_autocast_ctx` so the recorded
+        ``RunResult.precision`` always matches what actually executed.  Used to
+        audit cross-shard precision consistency before ranking.
+        """
+        from .model_configs import is_bf16_safe  # noqa: PLC0415
+
+        if (
+            self.device.startswith("cuda")
+            and torch.cuda.is_available()
+            and torch.cuda.get_device_capability()[0] >= 8
+            and (model_name is None or is_bf16_safe(model_name))
+        ):
+            return "bf16"
+        return "fp32"
 
     def _autocast_ctx(self, model_name: str | None = None) -> Any:
         """Return bf16 autocast when GPU and model support it, else a no-op.
