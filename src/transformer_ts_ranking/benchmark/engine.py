@@ -198,6 +198,7 @@ class BenchmarkEngine:
         lr: float = 1e-4,
         num_workers: int = 0,
         repo_root: Path | None = None,
+        enable_bf16: bool = False,
     ) -> None:
         """Initialise the engine with shared training hyperparameters.
 
@@ -209,6 +210,11 @@ class BenchmarkEngine:
             lr: Learning rate passed to the default Adam optimizer.
             num_workers: DataLoader worker processes.
             repo_root: Benchmark repository root (used to locate submodule).
+            enable_bf16: Opt-in to bf16 autocast on Ampere+ GPUs.  Defaults to
+                ``False`` so the benchmark runs **fp32 on every node**, giving
+                hardware-independent, mutually comparable results for ranking.
+                Set ``True`` only for an explicitly bf16-tracked experiment;
+                mixing bf16 and fp32 shards breaks cross-shard comparability.
         """
         self.device = device
         self.epochs = epochs
@@ -217,6 +223,7 @@ class BenchmarkEngine:
         self.lr = lr
         self.num_workers = num_workers
         self.repo_root = repo_root or Path(__file__).resolve().parents[4]
+        self.enable_bf16 = enable_bf16
         self._ensure_library_on_path()
 
     def _ensure_library_on_path(self) -> None:
@@ -816,7 +823,8 @@ class BenchmarkEngine:
         from .model_configs import is_bf16_safe  # noqa: PLC0415
 
         if (
-            self.device.startswith("cuda")
+            self.enable_bf16
+            and self.device.startswith("cuda")
             and torch.cuda.is_available()
             and torch.cuda.get_device_capability()[0] >= 8
             and (model_name is None or is_bf16_safe(model_name))
@@ -825,9 +833,12 @@ class BenchmarkEngine:
         return "fp32"
 
     def _autocast_ctx(self, model_name: str | None = None) -> Any:
-        """Return bf16 autocast when GPU and model support it, else a no-op.
+        """Return bf16 autocast when enabled, GPU/model support it, else no-op.
 
-        bf16 is gated on the GPU's *real* compute capability (Ampere+, sm_80,
+        bf16 is **off by default** (``enable_bf16=False``): the benchmark runs
+        fp32 on every node for hardware-independent, mutually comparable
+        rankings.  When explicitly opted in, bf16 is further gated on the GPU's
+        *real* compute capability (Ampere+, sm_80,
         i.e. ``major >= 8``), NOT on ``torch.cuda.is_bf16_supported()``.  The
         latter defaults to ``including_emulation=True`` in PyTorch >= 2.x and
         returns **True on a V100** (sm_70) because a bf16 *tensor* can be
@@ -845,7 +856,8 @@ class BenchmarkEngine:
         from .model_configs import is_bf16_safe  # noqa: PLC0415
 
         if (
-            self.device.startswith("cuda")
+            self.enable_bf16
+            and self.device.startswith("cuda")
             and torch.cuda.is_available()
             and torch.cuda.get_device_capability()[0] >= 8  # Ampere+ (real bf16)
             and (model_name is None or is_bf16_safe(model_name))
