@@ -1,9 +1,13 @@
 #!/bin/bash
-# Long-term benchmark — small datasets (illness, exchange_rate, ETTh1, ETTh2).
+# Long-term benchmark — small datasets (illness, exchange_rate).
 #
 # Each task runs ALL eligible models × all 4 horizons × 3 seeds × 30 epochs
 # on one dataset.  These datasets are small enough that all seeds fit in one
 # task well within the 4-day wall-time limit (estimated 10–45 h each).
+#
+# ETTh1/ETTh2 moved to run_lt_etth.sh (per-seed): their combined-seed run was
+# long enough (~1.5 days) to be caught by a host-OOM kill mid-run, leaving them
+# stuck at horizons 96/192.  Per-seed tasks are shorter and more resilient.
 #
 # Eligible models come from configs/benchmark/model_capability_matrix.yaml.
 # No experiment.models override: the capability matrix is the single source of
@@ -18,12 +22,12 @@
 #SBATCH --job-name lt-small
 #SBATCH --partition dgx2,dgx
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-3%4
+#SBATCH --array=0-1%2
 #SBATCH --time=2-00:00:00
 #SBATCH -o /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/lt_small_%A_%a.out
 #SBATCH -e /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/lt_small_%A_%a.err
 
-DATASETS=(illness exchange_rate ETTh1 ETTh2)
+DATASETS=(illness exchange_rate)
 DATASET="${DATASETS[$SLURM_ARRAY_TASK_ID]}"
 
 REPO=/mnt/homeGPU/JJavierAR/transformer-ts-ranking
