@@ -51,5 +51,9 @@ mkdir -p "$REPO/logs"
     wandb=disabled \
     "+results_dir=results/raw/m4/$FREQ" \
     "hydra.run.dir=outputs/m4/$FREQ"
+STATUS=$?
 
-echo "[$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID] Finished: $FREQ"
+# Propagate the Python exit code so a crash or SIGKILL (137) surfaces as a
+# FAILED job in sacct instead of being masked as COMPLETED by a trailing echo.
+echo "[$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID] Finished: $FREQ (exit=$STATUS)"
+exit $STATUS

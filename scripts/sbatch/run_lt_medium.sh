@@ -61,5 +61,9 @@ mkdir -p "$REPO/logs"
     wandb=disabled \
     "+results_dir=results/raw/long_term/${DATASET}_s${SEED}" \
     "hydra.run.dir=outputs/lt/${DATASET}_s${SEED}"
+STATUS=$?
 
-echo "[$SLURM_JOB_ID/$T] Finished: $DATASET seed=$SEED"
+# Propagate the Python exit code so a crash or SIGKILL (137) surfaces as a
+# FAILED job in sacct instead of being masked as COMPLETED by a trailing echo.
+echo "[$SLURM_JOB_ID/$T] Finished: $DATASET seed=$SEED (exit=$STATUS)"
+exit $STATUS

@@ -46,5 +46,11 @@ mkdir -p "$REPO/logs"
     wandb=disabled \
     "+results_dir=results/raw/long_term/$DATASET" \
     "hydra.run.dir=outputs/lt/${DATASET}"
+STATUS=$?
 
-echo "[$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID] Finished: $DATASET"
+# Propagate the Python exit code so a crash or SIGKILL (137) surfaces as a
+# FAILED job in sacct instead of being masked as COMPLETED by a trailing echo.
+# Without this, a mid-run host-OOM kill leaves the shard silently incomplete
+# (only the horizons processed before the kill) while SLURM reports success.
+echo "[$SLURM_JOB_ID/$SLURM_ARRAY_TASK_ID] Finished: $DATASET (exit=$STATUS)"
+exit $STATUS
