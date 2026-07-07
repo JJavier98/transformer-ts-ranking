@@ -44,9 +44,14 @@ BS="${BATCH_SIZES[$T]}"
 REPO=/mnt/homeGPU/JJavierAR/transformer-ts-ranking
 PYTHON="$REPO/.venv/bin/python"
 
+# Fast models only (22).  The 6 slow models run in run_lt_slow.sh (fine-grained
+# per-(dataset,seed,horizon)) so they don't blow the 4-day wall-time on the
+# large heavy datasets (electricity 321ch, traffic 862ch).
+FAST_MODELS="airformer,autoformer,basisformer,card,cats,chronos_bolt,crossformer,earthformer,etsformer,fedformer,informer,itransformer,lag_llama_pretrained,multipatchformer,nonstationary_transformer,patchtst,pyraformer,reformer,scaleformer,tft,timexer,transformer"
+
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 
-echo "[$SLURM_JOB_ID/$T] lt-heavy: $DATASET seed=$SEED batch_size=$BS — all models, 4 horizons, 30 epochs"
+echo "[$SLURM_JOB_ID/$T] lt-heavy: $DATASET seed=$SEED batch_size=$BS — 22 fast models, 4 horizons, 30 epochs"
 echo "Node: $(hostname)  GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
 echo "Python: $($PYTHON --version 2>&1)"
 
@@ -59,6 +64,7 @@ mkdir -p "$REPO/logs"
     "training.batch_size=$BS" \
     experiment=long_term \
     "experiment.datasets=[$DATASET]" \
+    "experiment.models=[$FAST_MODELS]" \
     wandb=disabled \
     "+results_dir=results/raw/long_term/${DATASET}_s${SEED}" \
     "hydra.run.dir=outputs/lt/${DATASET}_s${SEED}"
