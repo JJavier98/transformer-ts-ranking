@@ -201,14 +201,16 @@ def is_bf16_safe(model_name: str) -> bool:
 # runner-level batch_size is not changed globally.
 # ---------------------------------------------------------------------------
 _MODEL_BATCH_OVERRIDES: dict[str, "int | dict[int, int]"] = {
-    "contiformer": 4,
+    "contiformer": 2,
     # ContiFormer's ODE solver retains a [B, T, T, D] pairwise-integral tensor
-    # per function evaluation for the backward pass.  At B=16, T=96, fp32 the
-    # retained graph exceeds 40 GB and OOMs on both A100 (40 GB) and V100
-    # (32 GB).  The _MODEL_CONTEXT_LEN=96 cap does NOT help in long-term because
-    # the global seq_len is already 96 (the truncation is a no-op there), so the
-    # batch size is the only effective lever.  B=4 brings the retained graph to
-    # ~10 GB, fitting comfortably on both node classes in fp32.
+    # per function evaluation for the backward pass, and the adaptive solver's
+    # step count makes the retained graph much larger than the static estimate.
+    # B=4 was NOT enough: it still consumed all 31.7 GB on a V100 and OOM'd on
+    # both the M4 and long-term tracks (fp32).  The _MODEL_CONTEXT_LEN=96 cap is
+    # a no-op in long-term (global seq_len is already 96), so batch size is the
+    # only lever.  B=2 halves the retained graph (~16 GB) to fit V100 (32 GB)
+    # and A100 (40 GB).  ContiFormer is isolated in fine-grained jobs
+    # (run_lt_slow.sh), so the smaller batch does not slow the rest of the run.
     "spacetimeformer": 4,
     # Decoder attention has TWO quadratic terms:
     #   temporal: B × C × H × T_dec² × 4 bytes
