@@ -30,7 +30,10 @@
 #SBATCH -o /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/lt_slow_%A_%a.out
 #SBATCH -e /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/lt_slow_%A_%a.err
 
-SLOW_MODELS="pathformer,triformer,quatformer,spacetimeformer,deformable_tst,contiformer"
+# 4 slow-but-memory-OK models — run on any node (V100 or A100).
+# contiformer and pathformer OOM on V100 and are handled separately by
+# run_lt_memheavy.sh (pinned to the A100 node).
+SLOW_MODELS="triformer,quatformer,spacetimeformer,deformable_tst"
 
 DATASETS=(weather ETTm1 ETTm2 electricity traffic)
 SEEDS=(42 123 2026)
@@ -58,7 +61,7 @@ PYTHON="$REPO/.venv/bin/python"
 
 export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
 
-echo "[$SLURM_JOB_ID/$T] lt-slow: $DATASET seed=$SEED h=$HORIZON bs=$BS — 6 slow models, 30 epochs"
+echo "[$SLURM_JOB_ID/$T] lt-slow: $DATASET seed=$SEED h=$HORIZON bs=$BS — 4 slow models, 30 epochs"
 echo "Node: $(hostname)  GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
 echo "Python: $($PYTHON --version 2>&1)"
 
