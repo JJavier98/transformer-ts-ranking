@@ -38,16 +38,31 @@ from scipy import stats
 def _build_rank_matrix(
     results: pd.DataFrame,
     metric: str,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, dict[str, int]]:
     """Build a model × dataset-horizon rank matrix for the Friedman test.
+
+    Friedman and Nemenyi require a *complete* matrix.  When a model has not
+    produced a value for every configuration, this drops the **incomplete
+    models (rows)** — never the configurations (columns).  Dropping columns
+    would let a single unfinished model erase whole dataset-horizon configs
+    from the analysis: in the limit, one model that failed everywhere would
+    empty the matrix and make the test impossible.  Dropping rows keeps all
+    configurations and confines the loss to the models that genuinely could
+    not run.
+
+    This filtering is **in-memory only** — nothing is removed from the
+    persisted parquet.  Excluded models are returned so callers report them
+    explicitly; they belong in the paper's coverage table as N/A with a
+    justification, never silently omitted.
 
     Args:
         results: Raw results DataFrame.
         metric: Metric to rank on (lower = better).
 
     Returns:
-        DataFrame with models as rows and dataset-horizon configs as columns,
-        values are ranks (1 = best model for that config).
+        Tuple of (rank matrix with models as rows and dataset-horizon configs
+        as columns, where 1 = best model for that config; mapping of excluded
+        model name -> number of configurations it was missing).
     """
     agg = (
         results
@@ -57,11 +72,21 @@ def _build_rank_matrix(
     )
     agg["config"] = agg["dataset_name"] + "_h" + agg["horizon"].astype(str)
     pivot = agg.pivot(index="model_name", columns="config", values=metric)
-    # Drop configs where any model is missing (Friedman requires complete data)
-    pivot = pivot.dropna(axis=1)
+
+    # Identify models with incomplete coverage before dropping anything, so the
+    # exclusion is reportable rather than silent.
+    missing_per_model = pivot.isna().sum(axis=1)
+    excluded = {
+        str(model): int(n_missing)
+        for model, n_missing in missing_per_model.items()
+        if n_missing > 0
+    }
+
+    # Drop incomplete MODELS (rows), preserving every configuration.
+    complete = pivot.dropna(axis=0)
     # Rank within each config (ascending: lower metric = rank 1)
-    rank_matrix = pivot.rank(axis=0, ascending=True)
-    return rank_matrix
+    rank_matrix = complete.rank(axis=0, ascending=True)
+    return rank_matrix, excluded
 
 
 def run_friedman_test(
@@ -78,14 +103,26 @@ def run_friedman_test(
 
     Returns:
         Dict with statistic, p-value, degrees of freedom, and mean ranks.
+        Also ``excluded_models`` (model -> number of missing configurations):
+        models left out of the test because their coverage is incomplete.  An
+        empty mapping means every eligible model entered the ranking.
     """
     subset = results[results["task"] == task]
     if subset.empty:
         return {"error": f"No results for task '{task}'."}
 
-    rank_matrix = _build_rank_matrix(subset, metric)
+    rank_matrix, excluded = _build_rank_matrix(subset, metric)
+    if excluded:
+        print(
+            f"[friedman:{task}:{metric}] WARNING — {len(excluded)} model(s) "
+            f"excluded for incomplete coverage: {excluded}.  Complete their "
+            f"missing cells and re-run to include them in the ranking."
+        )
     if rank_matrix.shape[0] < 2 or rank_matrix.shape[1] < 2:
-        return {"error": "Insufficient data for Friedman test (need ≥2 models and ≥2 configs)."}
+        return {
+            "error": "Insufficient data for Friedman test (need ≥2 models and ≥2 configs).",
+            "excluded_models": excluded,
+        }
 
     # scipy.stats.friedmanchisquare expects one array per model (as rows)
     data = [rank_matrix.loc[m].values for m in rank_matrix.index]
@@ -102,6 +139,7 @@ def run_friedman_test(
         "p_value": float(p_value),
         "significant_at_0_05": bool(p_value < 0.05),
         "mean_ranks": mean_ranks.to_dict(),
+        "excluded_models": excluded,
     }
 
 
@@ -128,7 +166,7 @@ def run_nemenyi_test(
     if subset.empty:
         return pd.DataFrame()
 
-    rank_matrix = _build_rank_matrix(subset, metric)
+    rank_matrix, _excluded = _build_rank_matrix(subset, metric)
     if rank_matrix.shape[0] < 2:
         return pd.DataFrame()
 
@@ -376,6 +414,9 @@ def run_full_statistics(
             "n_datasets": n_datasets,
             "mean_ranks": mean_ranks,
             "cd_0_05": _critical_difference(len(mean_ranks), n_datasets, alpha=0.05),
+            # Models absent from this diagram because their coverage was
+            # incomplete — recorded so the figure's provenance is auditable.
+            "excluded_models": friedman.get("excluded_models", {}),
         }
         (stats_dir / f"cd_diagram_data_{task}.json").write_text(
             json.dumps(cd_data, indent=2)
