@@ -232,12 +232,16 @@ _MODEL_BATCH_OVERRIDES: dict[str, "int | dict[int, int]"] = {
 # Required for models whose attention is O(T²) in the encoder sequence.
 # ---------------------------------------------------------------------------
 _MODEL_CONTEXT_LEN: dict[str, int] = {
-    "contiformer": 96,
-    # ODELinear.forward() allocates [B, T, T, D] pairwise integral tensors.
-    # This cap only bites when the encoder input is longer than 96 (e.g. an M4
-    # slice with seq_len>96).  In the long-term track seq_len is already 96, so
-    # truncation is a no-op and the OOM is controlled by the B=4 batch override
-    # above instead.  96 is the benchmark's chosen context budget.
+    "contiformer": 48,
+    # ODELinear.forward() allocates [B, T, T, D] pairwise integral tensors, and
+    # the adaptive ODE solver retains one per function evaluation for backward.
+    # Even at batch=1 with T=96 this OOM'd on both V100 (32GB) and A100 (40GB).
+    # The tensor scales with T^2, so halving the context to 48 cuts that memory
+    # ~4x and is the only remaining lever.  ASYMMETRY: contiformer sees 48 input
+    # steps where every other model sees 96 (the prediction horizon is
+    # unchanged).  This is documented in docs/model_notes.md and contiformer's
+    # accuracy must be compared with that caveat; if it is materially worse or
+    # still OOMs, contiformer is marked N/A.
 }
 
 

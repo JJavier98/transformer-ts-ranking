@@ -116,14 +116,23 @@ data-driven from these dicts and the two accessor functions
   all T encoder time steps by allocating `[B, T, T, D]` intermediate tensors (where
   D = head dimension, T = sequence length).  This is O(B × T² × D) per attention layer.
   At the benchmark's standard T=336, B=16, the ODE tensors alone exceed 11 GB.
-- **Fix (context truncation):** The engine truncates the encoder input to the last
-  96 time steps before every `fit()` and `predict()` call via `_TruncatedLoader`
-  and inline slicing, resolved from `_MODEL_CONTEXT_LEN["contiformer"] = 96`.
-  At T=96 the ODE tensor is ~150 MB — well within budget.
+- **Fix (context truncation + batch=1):** In the fp32 benchmark the ODE solver's
+  retained autograd graph OOM'd at **every** batch size (16/4/2/1) on both V100 (32GB)
+  and A100 (40GB) with T=96 — far worse than the static `[B,T,T,D]` estimate because
+  the adaptive solver retains one such tensor per function evaluation.  The only lever
+  that worked was cutting the context: `_MODEL_CONTEXT_LEN["contiformer"] = 48`
+  (memory scales with T², so this is ~4× less) combined with `batch_size = 1`.
+- **⚠️ Comparability asymmetry (must appear in the paper):** contiformer therefore sees
+  **48 input steps where every other model sees 96**.  The *prediction horizon* is
+  unchanged (output length is fixed by the protocol), so the task difficulty is
+  identical, but contiformer has less input history.  Its accuracy must be reported
+  with this caveat; if it is materially worse than peers or still fails, contiformer is
+  marked **N/A** rather than ranked on an uneven footing.  Run via the unitary array
+  `scripts/sbatch/run_lt_contiformer.sh` (one cell per task).
 - **Scientific note for paper:** ContiFormer's continuous-time ODE design allows it to
-  operate on any context length; 96 steps is the benchmark's chosen budget given the
-  GPU constraints.  The paper reports this as a scalability limitation of the
-  ODE-pairwise-integral mechanism and notes the 96-step context explicitly in the
+  operate on any context length; the 48-step context is the benchmark's forced budget
+  given the GPU constraints.  The paper reports this as a scalability limitation of the
+  ODE-pairwise-integral mechanism and notes the 48-step context explicitly in the
   experimental setup table.
 - **bf16 benefit:** On A100 nodes the bf16 autocast halves the ODE tensor memory
   further (~75 MB at T=96).
