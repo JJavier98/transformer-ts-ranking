@@ -316,6 +316,25 @@ Core adds **zero heavy dependencies**. `[agent]` pulls the MCP SDK only for thos
 P1–P3 are pure library refactors with immediate payoff (the benchmark stops duplicating). P4
 closes the loop with this repo. P5–P6 are the agent-facing surface.
 
+### ⚠️ P1 safeguards (mandatory — protect benchmark validity)
+
+Moving capability declaration into the library is the **only** step that can perturb the
+benchmark, because the benchmark's *eligible model set* is derived from those capabilities. Two
+hard constraints:
+
+1. **Capability-preserving (parity gate).** After P1, regenerate the eligibility overlay and
+   assert the resulting eligible-model set is **identical** to the pre-P1 set (diff the generated
+   `model_capability_matrix.yaml` — intrinsic fields must match what introspection produced today).
+   Any change to the eligible set is a **methodological change** to the ranking population and must
+   be reviewed and justified explicitly, never applied silently.
+2. **Never mid-run.** Do **not** land P1 while a benchmark run is in flight. A shift in eligibility
+   mid-run would mean different shards ran against different model sets. Land P1 only when no
+   benchmark job is queued or running, then re-verify parity before the next run.
+
+Everything else (P2–P6) is additive and cannot change benchmark results: the experimental path
+(`create_model → fit → predict`), metrics, seeds, precision, and ranking are untouched, and
+already-persisted results remain valid.
+
 ---
 
 ## 13. Open questions / risks
@@ -329,6 +348,10 @@ closes the loop with this repo. P5–P6 are the agent-facing surface.
   the provenance commit makes staleness visible.
 - **MCP SDK churn** — pin the SDK in the `[agent]` extra; the core contract (schemas, cards) is
   SDK-independent, so churn is contained to one optional module.
+- **Benchmark perturbation via P1** *(highest-priority operational risk)* — the capability move can
+  silently change the eligible model set and thus the ranking population. Mitigated by the two
+  mandatory P1 safeguards above (parity gate + never mid-run). Treat any eligible-set diff as a
+  methodological change requiring explicit review.
 
 ---
 
