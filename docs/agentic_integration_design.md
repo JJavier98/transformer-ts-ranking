@@ -1,4 +1,4 @@
-# Design Document — Agentic Integration Layer for `s-transformers-lib`
+# Design Document — Integration Layer for `s-transformers-lib` (Agentic & Programmatic Consumption)
 
 | | |
 |---|---|
@@ -12,6 +12,13 @@
 > work it describes belongs in the library. Nothing here is implemented in
 > `s-transformers-lib` yet. The benchmark repo must never modify the submodule; this is a
 > spec to carry over, not a change to apply here.
+>
+> **Scope note.** The headline goal is making the library *agent-consumable* (Components 1–5,
+> §4–§8), but several of these foundations are just as valuable to **any** programmatic consumer —
+> the benchmark included. Components 6–7 (§9–§10, model-aware data loading and profiling
+> primitives) are **not agent-specific**; they live here because they share the same library/benchmark
+> split, the same parity safeguard, and the same "declare once, stop duplicating" principle. Keeping
+> them in one document avoids re-stating that shared framing in a second file.
 
 ---
 
@@ -78,6 +85,8 @@ flowchart TB
         CAP["capabilities(): intrinsic capability introspection"]
         SCHEMA["schemas: dataclasses -> JSON Schema / tool defs"]
         CARDS["model cards: capabilities + docs + runtime evidence"]
+        DATA["data: TimeSeriesDataset + create_dataloaders (exist)\n+ build_dataloaders(model) [§9, not agent-specific]"]
+        PROF["profiling primitives [§10, not agent-specific]"]
     end
 
     subgraph AGENT["s-transformers-lib[agent] (optional extra)"]
@@ -99,10 +108,17 @@ flowchart TB
     CARDS -. "empirical runtime evidence\n(OOM, needs time-marks...)" .- BENCH
     MCP --> PROD
     CAP --> BENCH
+    CAP --> DATA
+    DATA --> BENCH
+    DATA --> PROD
+    PROF --> BENCH
+    PROF --> PROD
 ```
 
-Five components, in dependency order: **capabilities → schemas → model cards → (optional) MCP →
-selection guidance**.
+Five agent-facing components, in dependency order: **capabilities → schemas → model cards →
+(optional) MCP → selection guidance** (§4–§8). Plus two **non-agent-specific** foundations that
+reuse the same capability layer and serve every consumer: **model-aware data loading** (§9) and
+**profiling primitives** (§10).
 
 ---
 
@@ -139,7 +155,7 @@ describe_model(name: str) -> ModelCard         # NEW (see §6)
 These are the *intrinsic* capability fields the benchmark currently keeps in
 `model_capability_matrix.yaml`. They are model-intrinsic and move to the library. The
 benchmark-specific fields (`eligible_long_term`, `eligible_m4`, `adapter_name`,
-`review_status`) **stay in the benchmark** — they are consumer decisions (see §9).
+`review_status`) **stay in the benchmark** — they are consumer decisions (see §11).
 
 ---
 
@@ -174,7 +190,7 @@ three sources:
 2. **Documented** — the paper reference, a one-line "what it's good at", family, a natural-language
    *selection hint*.
 3. **Empirical (runtime evidence)** — memory profile, known failure modes, node/precision
-   constraints. **This is fed by the benchmark** (see §10).
+   constraints. **This is fed by the benchmark** (see §12).
 
 Proposed format (`model_cards/<name>.yaml`, or generated on the fly by `describe_model`):
 
@@ -247,23 +263,77 @@ s-transformers-lib[agent]`).
 
 ---
 
-## 9. What stays in `transformer-ts-ranking`
+## 9. Component 6 — Model-aware data loading *(not agent-specific)*
+
+The library **already** ships strong data plumbing — `TimeSeriesDataset`, `create_dataloaders(...)`
+(temporal split **before** windowing, so no leakage), plus `scalers`, `revin`, `time_features`,
+`masking`, `imputation`. Accuracy metrics also already exist (`mse/mae/rmse/mape/smape/mase/r2_score`,
+`compute_all_metrics`). **Do not reimplement these** — reuse them (the benchmark currently duplicates
+part of this in its own windowing/metrics, another de-duplication opportunity).
+
+What is **missing** is the last mile: `create_dataloaders` takes a `mode`/`label_len`, but the
+*caller* must know which mode and which mark tensors each model needs. Add a **model-aware
+resolver** that reads the declared capabilities (§4) and returns correctly-shaped loaders:
+
+```python
+# s_transformers_lib/data/loaders.py
+def build_dataloaders(model_name: str, data, *, seq_len, pred_len, **kw
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """create_dataloaders configured from the model's ModelCapabilities:
+    resolves mode/label_len from `family`, and injects zero x_mark/y_mark
+    when `requires_time_marks` (the intrinsic half of the benchmark's adapters)."""
+```
+
+This is exactly the **intrinsic** part of what the benchmark's `adapters/` do (mark injection for the
+seq2seq models, mode/label_len selection). Moving that intrinsic resolution into the library means an
+agent — or any user — can say "give me loaders for `patchtst` on this data" and get the right batch
+format without knowing each model's quirks. The **consumer-specific** part of the adapters (the
+benchmark's exact batch dictionary, hardware batch overrides) stays in the benchmark (§11).
+
+---
+
+## 10. Component 7 — Efficiency profiling primitives *(not agent-specific)*
+
+The library has **no** general efficiency measurement (only incidental timing inside two pretrained
+models). Add small, unopinionated primitives — nothing benchmark-flavored:
+
+```python
+# s_transformers_lib/profiling.py
+def count_parameters(model) -> int: ...
+@contextmanager
+def profile_run(device):            # yields a handle exposing wall_time_s and peak_gpu_mb
+    ...
+def inference_latency(model, sample, n=50) -> float:   # ms/sample
+    ...
+```
+
+**Boundary (important).** The library provides the *primitives*; the **methodology stays in the
+benchmark** — the composite "efficiency score", the per-epoch JSONL, the leaderboards, and OWA (which
+needs the Naive2 reference) are *comparison decisions*, not model capabilities. This mirrors the same
+split as capabilities vs eligibility: reusable brick in the library, scoring policy in the consumer.
+
+---
+
+## 11. What stays in `transformer-ts-ranking`
 
 The split is: **intrinsic capability → library; consumer decision → benchmark.**
 
 | Stays in the benchmark | Reason |
 |---|---|
 | `eligible_long_term`, `eligible_m4` | Track-specific eligibility is a benchmark decision |
-| `adapters/` (batch-format normalization, mark injection) | The benchmark's dataloader contract, not the model's |
+| `adapters/` — **only** the consumer-specific batch dict | The *intrinsic* half (mark injection, mode/label_len) moves to the library's `build_dataloaders` (§9) |
 | Ranking: Friedman / Nemenyi / CD, leaderboards | The benchmark's whole purpose |
+| Efficiency **methodology**: composite score, per-epoch JSONL, OWA (Naive2) | Comparison policy, not a model capability — uses the library's profiling primitives (§10) |
 | Per-model batch/context overrides for *this* hardware | Deployment-specific, not intrinsic |
 
-After the move, the benchmark's `discovery/` shrinks: it **consumes** `capabilities()` from the
-library instead of re-introspecting, and keeps only the eligibility overlay.
+After the move, the benchmark **consumes** from the library instead of re-implementing:
+`capabilities()` (not re-introspection), `build_dataloaders` (not its own windowing), the accuracy
+metrics, and the profiling primitives — keeping only its eligibility overlay, adapter batch dict,
+scoring policy, and ranking.
 
 ---
 
-## 10. The benchmark as validator and feeder
+## 12. The benchmark as validator and feeder
 
 There is a clean, virtuous data flow:
 
@@ -287,13 +357,15 @@ section. Declared capabilities and measured behavior stay distinguishable by pro
 
 ---
 
-## 11. Packaging
+## 13. Packaging
 
 ```
 s-transformers-lib/
   src/interfaces/capabilities.py     # ModelCapabilities (core)
   src/schemas.py                     # dataclass -> JSON Schema (core, light)
   src/model_cards/                   # <name>.yaml + generated schemas (core, data)
+  src/data/loaders.py                # build_dataloaders(model_name, ...) (core)  [§9]
+  src/profiling.py                   # count_parameters / profile_run / latency (core)  [§10]
   src/agent/mcp.py                   # MCP server (extra: [agent])
 pyproject: optional-dependencies.agent = ["mcp", ...]
 ```
@@ -302,7 +374,7 @@ Core adds **zero heavy dependencies**. `[agent]` pulls the MCP SDK only for thos
 
 ---
 
-## 12. Phasing
+## 14. Phasing
 
 | Phase | Deliverable | Depends on |
 |---|---|---|
@@ -312,9 +384,13 @@ Core adds **zero heavy dependencies**. `[agent]` pulls the MCP SDK only for thos
 | **P4** | Benchmark exports `runtime_evidence.json`; cards gain the `runtime:` section | P3 + a full benchmark run |
 | **P5** | MCP server as `[agent]` extra (`list/describe/recommend/forecast`) | P2, P3 |
 | **P6** | `forecasting-toolkit` Agent Skill + selection playbook citing the leaderboard | P3, P5 |
+| **P7** | `build_dataloaders(model_name, ...)` — model-aware loader resolution (§9) | P1 |
+| **P8** | Profiling primitives `count_parameters` / `profile_run` / `inference_latency` (§10) | — |
 
 P1–P3 are pure library refactors with immediate payoff (the benchmark stops duplicating). P4
-closes the loop with this repo. P5–P6 are the agent-facing surface.
+closes the loop with this repo. P5–P6 are the agent-facing surface. **P7–P8 are independent of the
+agent surface** — non-agent utilities that consolidate data/efficiency plumbing; P8 has no
+dependencies and can land any time; P7 depends on P1 (it reads declared capabilities).
 
 ### ⚠️ P1 safeguards (mandatory — protect benchmark validity)
 
@@ -331,13 +407,21 @@ hard constraints:
    mid-run would mean different shards ran against different model sets. Land P1 only when no
    benchmark job is queued or running, then re-verify parity before the next run.
 
-Everything else (P2–P6) is additive and cannot change benchmark results: the experimental path
+Everything else (P2–P6, P8) is additive and cannot change benchmark results: the experimental path
 (`create_model → fit → predict`), metrics, seeds, precision, and ranking are untouched, and
 already-persisted results remain valid.
 
+**P7 caveat (only if the benchmark later adopts `build_dataloaders`).** Shipping the loader in the
+library changes nothing on its own. But if the benchmark *migrates* onto it, that migration must be
+**batch-preserving**: the loaders must yield windows, splits, scaling, and injected marks **identical**
+to the current `window_dataset.py` + adapters, verified by a byte-level batch diff on a fixed seed
+before any results are regenerated. Same discipline as the P1 parity gate, and likewise never
+mid-run. Until such a migration is deliberately validated, the benchmark keeps its own data path and
+only *new* consumers use `build_dataloaders`.
+
 ---
 
-## 13. Open questions / risks
+## 15. Open questions / risks
 
 - **`train` as a tool** is dangerous (long, resource-heavy). Recommend: expose only as an async,
   explicitly-guarded tool, or omit from the default MCP surface and keep `forecast` (inference)
@@ -355,7 +439,7 @@ already-persisted results remain valid.
 
 ---
 
-## 14. Appendix — concrete sketches
+## 16. Appendix — concrete sketches
 
 **`recommend_models` request/response**
 
