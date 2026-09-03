@@ -1,0 +1,82 @@
+# MkDocs configuration for the s-transformers-lib documentation site.
+# Stack: MkDocs + Material + mkdocstrings (see docs/documentation_site_design.md).
+#
+# This file is a PORTABLE SCAFFOLD produced in the benchmark repo. Drop it (and
+# the sibling docs/, scripts/) into the s-transformers-lib repository root.
+# Adjust `site_url`/`repo_url` and the package import path if the library's
+# installable package name differs from `s_transformers_lib`.
+
+site_name: s-transformers-lib
+site_description: A unified toolkit of state-of-the-art transformer models for time-series forecasting.
+# site_url: https://s-transformers-lib.readthedocs.io/
+# repo_url: https://github.com/ari-dasci/S-TransformerTS
+# repo_name: ari-dasci/S-TransformerTS
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: { icon: material/weather-night, name: Switch to dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: { icon: material/weather-sunny, name: Switch to light mode }
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - scripts/gen_ref_pages.py     # auto API reference tree
+        - scripts/gen_model_pages.py   # one page per registered model
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            separate_signature: true
+            merge_init_into_class: true
+  - mkdocs-jupyter:
+      execute: false           # render-as-saved; model demos may need a GPU
+      include_source: true
+
+markdown_extensions:
+  - admonition
+  - toc: { permalink: true }
+  - pymdownx.highlight: { anchor_linenums: true }
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.arithmatex: { generic: true }
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - First forecast: tutorials/first-forecast.md
+      - Train & evaluate: tutorials/train-and-evaluate.md
+  - How-to guides:
+      - Add a new model: how-to/add-a-model.md
+      - Normalization (RevIN & scalers): how-to/normalization.md
+      - Build dataloaders: how-to/dataloaders.md
+      - Choose a model: how-to/choose-a-model.md
+  - Explanation:
+      - Unified contract: explanation/unified-contract.md
+      - Model families: explanation/model-families.md
+  - Models: models/          # auto-generated (gen_model_pages.py + literate-nav)
+  - API Reference: reference/ # auto-generated (gen_ref_pages.py + literate-nav)
+  - Benchmark & Results: benchmark/results.md
