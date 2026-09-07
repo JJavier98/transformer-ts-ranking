@@ -44,11 +44,11 @@ For `probe-compatibility` and `validate-canonical-forward`, always pass `--model
 
 ## s-transformers-lib API contract
 
-The library uses a unified interface rooted in `BaseTransformerModel` (`src/interfaces/base_model.py`). The canonical flow:
+The library uses a unified interface rooted in `BaseTransformerModel` (`s_transformers_lib/interfaces/base_model.py`). The canonical flow:
 
 ```python
-from s_transformers_lib.src.models import create_model
-from s_transformers_lib.src.interfaces.forecasting import ForecastInput, TrainingConfig
+from s_transformers_lib.models import create_model
+from s_transformers_lib.interfaces.forecasting import ForecastInput, TrainingConfig
 
 model = create_model("patchtst", config={...})
 model.fit(train_data, val_data, training=TrainingConfig(epochs=10, device="cuda"))

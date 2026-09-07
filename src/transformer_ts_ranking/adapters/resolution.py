@@ -63,7 +63,17 @@ def resolve_model_adapter(
         raise KeyError(f"Unknown model '{model_name}'. Available: {available}")
 
     entry = entries[model_name]
+    # Prefer the library's DECLARED capability family (authoritative and kept in
+    # sync with each model's config.py) over the matrix's adapter_name, which is
+    # a benchmark-local field that can drift.  Fall back to the matrix value if
+    # the library is not importable (e.g. offline unit tests).
     adapter_name = entry.get("adapter_name")
+    try:
+        from s_transformers_lib import capabilities  # noqa: PLC0415
+
+        adapter_name = capabilities(model_name).family
+    except Exception:
+        pass
     if not adapter_name:
         raise ValueError(f"Model '{model_name}' is missing adapter_name in the capability matrix.")
 

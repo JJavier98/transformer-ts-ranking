@@ -114,7 +114,7 @@ class BenchmarkRunner:
         self._ensure_library_on_path()
 
     def _ensure_library_on_path(self) -> None:
-        """Add submodule root to sys.path (registry uses src.models.* paths)."""
+        """Add submodule root to sys.path (registry uses s_transformers_lib.models.* paths)."""
         lib_root = str(self.cfg.repo_root / "s-transformers-lib")
         if lib_root not in sys.path:
             sys.path.insert(0, lib_root)

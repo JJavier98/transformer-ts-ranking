@@ -30,6 +30,7 @@ Runtime patches (``_MODEL_PATCHES`` / ``patch_model_instance``):
 from __future__ import annotations
 
 import types
+from functools import lru_cache
 from typing import Any
 
 
@@ -285,29 +286,23 @@ def get_context_len_override(model_name: str) -> "int | None":
     """
     return _MODEL_CONTEXT_LEN.get(model_name)
 
-# Models whose seq2seq nature requires an explicit label_len in the config.
-# All other eligible models receive label_len=0 (encoder-only style).
-_SEQ2SEQ_MODELS = frozenset({
-    "autoformer",
-    "basisformer",
-    "cats",
-    "deformable_tst",
-    "fedformer",
-    "informer",
-    "nonstationary_transformer",
-    "patchtst",
-    "pyraformer",
-    "quatformer",
-    "reformer",
-    "scaleformer",
-    "spacetimeformer",
-    "tft",
-    # TFT uses label_len in 10 places (batch_y[:, :self.label_len, :],
-    # x_mark_dec[:, c.label_len:, :], etc.).  Without this entry label_len=0
-    # and Python's x[:, -0:, :] returns the full encoder sequence (since -0==0),
-    # feeding the wrong decoder context and silently corrupting TFT outputs.
-    "transformer",
-})
+@lru_cache(maxsize=1)
+def _seq2seq_models() -> frozenset[str]:
+    """Models needing an explicit ``label_len`` (decoder context).
+
+    Read from the library's DECLARED capabilities (``family == "seq2seq"``,
+    i.e. the model's config has a ``label_len`` field) rather than a hardcoded
+    list — so the benchmark uses each model's own characterization instead of a
+    duplicated, drift-prone list.  All other models get ``label_len=0``.
+
+    Note: models whose config lacks ``label_len`` have it filtered out by
+    ``filter_config_for_model`` regardless, so this only materially affects
+    models that genuinely declare a decoder context.
+    """
+    from s_transformers_lib import capabilities  # noqa: PLC0415
+    from s_transformers_lib.models import list_models  # noqa: PLC0415
+
+    return frozenset(m for m in list_models() if capabilities(m).family == "seq2seq")
 
 
 def filter_config_for_model(model_name: str, config: dict[str, Any]) -> Any:
@@ -345,7 +340,7 @@ def filter_config_for_model(model_name: str, config: dict[str, Any]) -> Any:
         sys.path.insert(0, lib_root)
 
     try:
-        from src.models import get_config_class  # noqa: PLC0415
+        from s_transformers_lib.models import get_config_class  # noqa: PLC0415
         config_cls = get_config_class(model_name)
         sig = inspect.signature(config_cls.__init__)
         # Exclude 'self' and variadic **kwargs / *args so they don't consume
@@ -389,7 +384,7 @@ def build_long_term_config(
     Returns:
         Config dict ready for ``create_model(model_name, config=...)``.
     """
-    effective_label_len = label_len if model_name in _SEQ2SEQ_MODELS else 0
+    effective_label_len = label_len if model_name in _seq2seq_models() else 0
 
     config: dict[str, Any] = {
         # Core forecasting dimensions
@@ -436,7 +431,7 @@ def build_m4_config(
     Returns:
         Config dict ready for ``create_model(model_name, config=...)``.
     """
-    effective_label_len = min(horizon // 2, 24) if model_name in _SEQ2SEQ_MODELS else 0
+    effective_label_len = min(horizon // 2, 24) if model_name in _seq2seq_models() else 0
 
     config: dict[str, Any] = {
         "seq_len": seq_len,

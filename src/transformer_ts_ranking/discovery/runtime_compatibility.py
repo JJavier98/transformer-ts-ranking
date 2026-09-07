@@ -435,7 +435,7 @@ def probe_model_compatibility(
     output_path = output_path.resolve()
 
     with _prepended_sys_path(submodule_root):
-        registry_module = import_module("src.models.registry")
+        registry_module = import_module("s_transformers_lib.models.registry")
         create_model = registry_module.create_model
         get_config_class = registry_module.get_config_class
         list_models = registry_module.list_models
@@ -518,7 +518,7 @@ def validate_canonical_forward_pass(
     output_path = output_path.resolve()
 
     with _prepended_sys_path(submodule_root):
-        registry_module = import_module("src.models.registry")
+        registry_module = import_module("s_transformers_lib.models.registry")
         create_model = registry_module.create_model
         get_config_class = registry_module.get_config_class
         list_models = registry_module.list_models

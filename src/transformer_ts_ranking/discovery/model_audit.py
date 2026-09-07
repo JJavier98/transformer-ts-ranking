@@ -100,7 +100,7 @@ def _discover_model_directories(models_dir: Path) -> list[str]:
     """List model package directories present on disk.
 
     Args:
-        models_dir: ``src/models`` directory inside the submodule.
+        models_dir: ``s_transformers_lib/models`` directory inside the submodule.
 
     Returns:
         Sorted model directory names that look like Python packages.
@@ -161,7 +161,7 @@ def _load_registry_mappings(registry_path: Path) -> tuple[dict[str, str], dict[s
     """Load model and config registries from the submodule registry file.
 
     Args:
-        registry_path: Path to ``src/models/registry.py``.
+        registry_path: Path to ``s_transformers_lib/models/registry.py``.
 
     Returns:
         The model registry and config registry mappings.
@@ -529,7 +529,7 @@ def audit_model_library(repo_root: Path, submodule_root: Path) -> AuditReport:
     """
     repo_root = repo_root.resolve()
     submodule_root = submodule_root.resolve()
-    models_dir = submodule_root / "src" / "models"
+    models_dir = submodule_root / "s_transformers_lib" / "models"
     registry_path = models_dir / "registry.py"
 
     if not models_dir.exists():
@@ -548,7 +548,7 @@ def audit_model_library(repo_root: Path, submodule_root: Path) -> AuditReport:
             model_name=model_name,
             in_filesystem=model_name in filesystem_models,
             registered=model_name in registered_models,
-            model_module_path=f"src/models/{model_name}",
+            model_module_path=f"s_transformers_lib/models/{model_name}",
             model_class_name=model_registry.get(model_name),
             config_class_name=config_registry.get(model_name),
         )

@@ -229,9 +229,9 @@ class BenchmarkEngine:
     def _ensure_library_on_path(self) -> None:
         """Add the s-transformers-lib root to sys.path.
 
-        The library's registry uses ``src.models.<key>`` as the module path,
+        The library's registry uses ``s_transformers_lib.models.<key>`` as the module path,
         so the library *root* (not its ``src/`` subdirectory) must be on
-        ``sys.path`` so that ``import src.models.itransformer`` resolves
+        ``sys.path`` so that ``import s_transformers_lib.models.itransformer`` resolves
         correctly.
         """
         lib_root = str(self.repo_root / "s-transformers-lib")
@@ -381,8 +381,8 @@ class BenchmarkEngine:
         context_len: int | None = None,
     ) -> RunResult:
         """Execute the full training loop and test evaluation."""
-        from src.interfaces.forecasting import TrainingConfig  # noqa: PLC0415
-        from src.models import create_model                    # noqa: PLC0415
+        from s_transformers_lib.interfaces.forecasting import TrainingConfig  # noqa: PLC0415
+        from s_transformers_lib.models import create_model                    # noqa: PLC0415
 
         model = create_model(model_name, config=model_config)
         model.to(self.device)
@@ -489,7 +489,7 @@ class BenchmarkEngine:
                 if y_mark is not None:
                     y_mark = y_mark.to(self.device).float()
 
-                from src.interfaces.forecasting import ForecastInput  # noqa: PLC0415
+                from s_transformers_lib.interfaces.forecasting import ForecastInput  # noqa: PLC0415
 
                 forecast_input = ForecastInput(x=x, x_mark=x_mark, y_mark=y_mark)
 
@@ -649,8 +649,8 @@ class BenchmarkEngine:
         context_len: int | None = None,
     ) -> RunResult:
         """Full M4 training + OWA evaluation."""
-        from src.interfaces.forecasting import ForecastInput, TrainingConfig  # noqa: PLC0415
-        from src.models import create_model                                    # noqa: PLC0415
+        from s_transformers_lib.interfaces.forecasting import ForecastInput, TrainingConfig  # noqa: PLC0415
+        from s_transformers_lib.models import create_model                                    # noqa: PLC0415
         from ..benchmark.window_dataset import M4SeriesDataset                # noqa: PLC0415
         from ..evaluation.m4_metrics import (                                  # noqa: PLC0415
             evaluate_m4_dataset,
