@@ -286,6 +286,20 @@ def get_context_len_override(model_name: str) -> "int | None":
     """
     return _MODEL_CONTEXT_LEN.get(model_name)
 
+# v1-consistency pin: models whose corrected library family would change their
+# label_len relative to how the already-computed v1 results were produced.  v1
+# (the 82% completed run) ran etsformer with label_len=0; the corrected library
+# capabilities now classify it seq2seq (its config has label_len).  To keep v1
+# and the resumed cells MIXABLE (avoid re-running an infeasibly long benchmark),
+# we pin etsformer to its v1 treatment here.  This is a benchmark-local decision
+# for result comparability; the library capability (etsformer = seq2seq) is
+# unchanged and correct.  The other five models that left the old seq2seq set
+# (basisformer, cats, deformable_tst, patchtst, reformer) need no pin: their
+# configs have no label_len field, so filter_config_for_model dropped it in both
+# v1 and now — their configs are byte-identical either way.
+_V1_LABEL_LEN_PIN_ZERO = frozenset({"etsformer"})
+
+
 @lru_cache(maxsize=1)
 def _seq2seq_models() -> frozenset[str]:
     """Models needing an explicit ``label_len`` (decoder context).
@@ -295,14 +309,18 @@ def _seq2seq_models() -> frozenset[str]:
     list — so the benchmark uses each model's own characterization instead of a
     duplicated, drift-prone list.  All other models get ``label_len=0``.
 
-    Note: models whose config lacks ``label_len`` have it filtered out by
-    ``filter_config_for_model`` regardless, so this only materially affects
-    models that genuinely declare a decoder context.
+    ``_V1_LABEL_LEN_PIN_ZERO`` is subtracted to preserve mixability with the
+    already-computed v1 results (see that set's comment).  Models whose config
+    lacks ``label_len`` are unaffected either way (it is filtered out).
     """
     from s_transformers_lib import capabilities  # noqa: PLC0415
     from s_transformers_lib.models import list_models  # noqa: PLC0415
 
-    return frozenset(m for m in list_models() if capabilities(m).family == "seq2seq")
+    return frozenset(
+        m
+        for m in list_models()
+        if capabilities(m).family == "seq2seq" and m not in _V1_LABEL_LEN_PIN_ZERO
+    )
 
 
 def filter_config_for_model(model_name: str, config: dict[str, Any]) -> Any:
