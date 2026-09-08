@@ -40,6 +40,9 @@ submit() {  # submit <nice> <script>
     fi
 }
 
+echo "== Tier 0 (nice 0): toto2 — zero-shot, seconds per cell, cheapest first =="
+submit 0 "$S/run_lt_toto2.sh"
+
 echo "== Tier 1 (nice 0): fast 22 models — electricity/traffic gap-fill =="
 submit 0 "$S/run_lt_heavy.sh"
 

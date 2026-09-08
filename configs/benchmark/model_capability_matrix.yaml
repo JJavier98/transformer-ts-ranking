@@ -1,13 +1,13 @@
 generated_at: '2026-06-15T14:47:56.159179+00:00'
 summary:
-  total_models: 31
+  total_models: 32
   filesystem_models: 31
   registered_models: 31
   filesystem_only: 0
   registry_only: 0
   inspection_failures: 0
-  eligible_long_term: 28
-  eligible_m4: 28
+  eligible_long_term: 29
+  eligible_m4: 29
 models:
 - model_name: airformer
   registered: true
@@ -21,16 +21,16 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
-    the encoder-only profile.'
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with the encoder-only
+    profile.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Runtime probe confirmed AirFormer executes as an encoder-only
-    forecaster on both regular multivariate long-term data and univariate M4-style
-    inputs without a required external spatial graph.
+  eligibility_reason: Runtime probe confirmed AirFormer executes as an encoder-only forecaster on both
+    regular multivariate long-term data and univariate M4-style inputs without a required external spatial
+    graph.
 - model_name: autoformer
   registered: true
   supports_regular_mts: true
@@ -43,8 +43,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -62,8 +62,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -81,8 +81,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
   eligibility_source: bootstrap_heuristic
@@ -99,8 +99,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -118,17 +118,16 @@ models:
   eligible_m4: false
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Excluded from benchmark: paper evaluates only the pretrained foundation model
-    track (chronos_bolt). Training Chronos-2 from scratch is not in scope.'
+  - 'Excluded from benchmark: paper evaluates only the pretrained foundation model track (chronos_bolt).
+    Training Chronos-2 from scratch is not in scope.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: 'Excluded by design: the benchmark represents Chronos via chronos_bolt
-    (official Amazon pretrained weights, zero-shot). Training Chronos-2 from scratch
-    is out of scope for this survey.'
+  eligibility_reason: 'Excluded by design: the benchmark represents Chronos via chronos_bolt (official
+    Amazon pretrained weights, zero-shot). Training Chronos-2 from scratch is out of scope for this survey.'
 - model_name: chronos_bolt
   registered: true
   supports_regular_mts: true
@@ -141,26 +140,23 @@ models:
   eligible_m4: true
   adapter_name: pretrained_zeroshot
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - 'train_step is missing required params: batch, loss_fn, optimizer.'
   - 'eval_step is missing required params: batch, loss_fn.'
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   - Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.
   - Weights are downloaded from HuggingFace (amazon/chronos-bolt-small) on first predict().
-  - Multi-channel inputs are treated as independent univariate series (channel-wise
-    inference).
-  - Results tagged pretrained_weights=amazon/chronos-bolt-small for transparency in
-    leaderboards.
-  - NOT comparable to from-scratch models on equal footing; used as a foundation-model
-    baseline.
+  - Multi-channel inputs are treated as independent univariate series (channel-wise inference).
+  - Results tagged pretrained_weights=amazon/chronos-bolt-small for transparency in leaderboards.
+  - NOT comparable to from-scratch models on equal footing; used as a foundation-model baseline.
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Official Chronos-Bolt pretrained model (zero-shot). Included
-    as a foundation-model baseline to compare against task-specific transformers trained
-    from scratch. The benchmark engine injects the dataset scaler so the normalisation
-    round-trip is handled correctly without modifying the batch protocol.
+  eligibility_reason: Official Chronos-Bolt pretrained model (zero-shot). Included as a foundation-model
+    baseline to compare against task-specific transformers trained from scratch. The benchmark engine
+    injects the dataset scaler so the normalisation round-trip is handled correctly without modifying
+    the batch protocol.
   pretrained: true
   pretrained_source: huggingface
   pretrained_model_id: amazon/chronos-bolt-small
@@ -176,24 +172,23 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
-    the encoder-only profile.'
-  - 'Excluded after smoke test (2026-06-20): CUDA OOM on all 4 horizons of ETTh1 at
-    batch_size=16 on a V100-39GB. Root cause: ODELinear allocates [B,T,T,D] pairwise
-    integral tensors — O(B×T²×D) cost; at T=336 B=16 reaches ~11 GB.'
-  - 'Re-enabled (2026-06-24): engine now truncates encoder input to context_len=96
-    (via get_context_len_override) before every fit() and predict() call.  At T=96
-    the pairwise ODE tensor is ~150 MB — well within budget.  bf16 autocast
-    (active on A100 nodes) halves memory further.  Documented in paper as a known
-    scalability limitation of continuous-time ODE attention.'
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with the encoder-only
+    profile.'
+  - 'Excluded after smoke test (2026-06-20): CUDA OOM on all 4 horizons of ETTh1 at batch_size=16 on a
+    V100-39GB. Root cause: ODELinear allocates [B,T,T,D] pairwise integral tensors — O(B×T²×D) cost; at
+    T=336 B=16 reaches ~11 GB.'
+  - 'Re-enabled (2026-06-24): engine now truncates encoder input to context_len=96 (via get_context_len_override)
+    before every fit() and predict() call.  At T=96 the pairwise ODE tensor is ~150 MB — well within budget.  bf16
+    autocast (active on A100 nodes) halves memory further.  Documented in paper as a known scalability
+    limitation of continuous-time ODE attention.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: 'Re-enabled after context-length truncation fix (2026-06-24):
-    engine truncates encoder input to 96 steps, reducing ODE memory from ~11 GB to
-    ~150 MB. Context length of 96 is documented in the paper.'
+  eligibility_reason: 'Re-enabled after context-length truncation fix (2026-06-24): engine truncates encoder
+    input to 96 steps, reducing ODE memory from ~11 GB to ~150 MB. Context length of 96 is documented
+    in the paper.'
 - model_name: crossformer
   registered: true
   supports_regular_mts: true
@@ -206,8 +201,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
   eligibility_source: bootstrap_heuristic
@@ -224,8 +219,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -243,15 +238,15 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
-    Earthformer configured in 1d mode.'
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with Earthformer configured
+    in 1d mode.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Runtime probe confirmed Earthformer runs in documented 1d mode
-    for both long-term and M4-style series, so it should not be excluded as spatial-only.
+  eligibility_reason: Runtime probe confirmed Earthformer runs in documented 1d mode for both long-term
+    and M4-style series, so it should not be excluded as spatial-only.
 - model_name: etsformer
   registered: true
   supports_regular_mts: true
@@ -264,8 +259,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -283,8 +278,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -302,8 +297,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -321,8 +316,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -340,17 +335,17 @@ models:
   eligible_m4: false
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Excluded from benchmark: paper evaluates only the pretrained foundation model
-    track (lag_llama_pretrained). Training from scratch is not in scope.'
+  - 'Excluded from benchmark: paper evaluates only the pretrained foundation model track (lag_llama_pretrained).
+    Training from scratch is not in scope.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: 'Excluded by design: the benchmark represents Lag-Llama via
-    lag_llama_pretrained (official pretrained weights, zero-shot). Training Lag-Llama
-    from scratch is out of scope for this survey.'
+  eligibility_reason: 'Excluded by design: the benchmark represents Lag-Llama via lag_llama_pretrained
+    (official pretrained weights, zero-shot). Training Lag-Llama from scratch is out of scope for this
+    survey.'
 - model_name: lag_llama_pretrained
   registered: true
   supports_regular_mts: true
@@ -363,29 +358,25 @@ models:
   eligible_m4: true
   adapter_name: pretrained_zeroshot
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - 'train_step is missing required params: batch, loss_fn, optimizer.'
   - 'eval_step is missing required params: batch, loss_fn.'
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   - Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.
-  - Weights are downloaded from HuggingFace (time-series-foundation-models/Lag-Llama)
-    on first predict().
+  - Weights are downloaded from HuggingFace (time-series-foundation-models/Lag-Llama) on first predict().
   - Intrinsically univariate; multi-channel series are predicted channel-by-channel.
-  - "Autoregressive decoding: pred_len sequential forward passes (~pred_len\xD7 slower\
-    \ than parallel models)."
-  - 'Root cause of smoke-test failure identified (2026-06-22): build_long_term_config
-    injects generic defaults d_ff=256 and n_heads=4 into the config dict before
-    filter_config_for_model passes them to LagLlamaPretrainedConfig, overriding its
-    field defaults (d_ff=512, n_heads=8). Fix applied to _MODEL_OVERRIDES: added
-    d_ff=512, n_heads=8, n_layers=8. Verified with load_state_dict — missing=[], unexpected=[].'
+  - 'Autoregressive decoding: pred_len sequential forward passes (~pred_len× slower than parallel models).'
+  - 'Root cause of smoke-test failure identified (2026-06-22): build_long_term_config injects generic
+    defaults d_ff=256 and n_heads=4 into the config dict before filter_config_for_model passes them to
+    LagLlamaPretrainedConfig, overriding its field defaults (d_ff=512, n_heads=8). Fix applied to _MODEL_OVERRIDES:
+    added d_ff=512, n_heads=8, n_layers=8. Verified with load_state_dict — missing=[], unexpected=[].'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: 'Re-enabled (2026-06-22): config bug fixed in model_configs.py.
-    Pretrained weights now load cleanly. Included as a foundation-model baseline
-    alongside Chronos-Bolt. Multi-channel inputs predicted channel-by-channel.
-    Autoregressive decoding is ~pred_len× slower; tagged in timing logs.'
+  eligibility_reason: 'Re-enabled (2026-06-22): config bug fixed in model_configs.py. Pretrained weights
+    now load cleanly. Included as a foundation-model baseline alongside Chronos-Bolt. Multi-channel inputs
+    predicted channel-by-channel. Autoregressive decoding is ~pred_len× slower; tagged in timing logs.'
   pretrained: true
   pretrained_source: huggingface
   pretrained_model_id: time-series-foundation-models/Lag-Llama
@@ -401,8 +392,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -420,8 +411,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -439,8 +430,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -458,8 +449,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -477,8 +468,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -496,8 +487,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -515,8 +506,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -534,8 +525,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -553,17 +544,15 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
-    the seq2seq profile.'
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with the seq2seq profile.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Runtime probe confirmed Spacetimeformer executes on both benchmark
-    tracks with its standard seq2seq interface, so it should not be excluded as requiring
-    external spatial structure.
+  eligibility_reason: Runtime probe confirmed Spacetimeformer executes on both benchmark tracks with its
+    standard seq2seq interface, so it should not be excluded as requiring external spatial structure.
 - model_name: tft
   registered: true
   supports_regular_mts: true
@@ -576,17 +565,15 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
-    the seq2seq profile.'
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with the seq2seq profile.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Runtime probe confirmed TFT works on both benchmark tracks with
-    time marks but without mandatory external exogenous covariates, so the bootstrap
-    exclusion was too strict.
+  eligibility_reason: Runtime probe confirmed TFT works on both benchmark tracks with time marks but without
+    mandatory external exogenous covariates, so the bootstrap exclusion was too strict.
 - model_name: timexer
   registered: true
   supports_regular_mts: true
@@ -599,17 +586,42 @@ models:
   eligible_m4: true
   adapter_name: exogenous_aware
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with
-    the time-marked encoder profile.'
+  - 'Manual override: runtime compatibility probe succeeded for long_term and M4 with the time-marked
+    encoder profile.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Runtime probe confirmed TimeXer executes on both benchmark tracks
-    with time-mark inputs and does not require separate exogenous covariates to participate
-    in the automated rankings.
+  eligibility_reason: Runtime probe confirmed TimeXer executes on both benchmark tracks with time-mark
+    inputs and does not require separate exogenous covariates to participate in the automated rankings.
+- model_name: toto2
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: pretrained_zeroshot
+  pretrained: true
+  pretrained_source: huggingface
+  pretrained_model_id: Datadog/Toto-2.0-22m
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Added 2026-09-08 after the Toto 2.0 PR merged into the library. Zero-shot pretrained
+    foundation model, natively multivariate (joint time/variate attention). Requires its own Python 3.12
+    environment (.venv-toto2) because the upstream toto-models package needs Python >=3.12; run via scripts/sbatch/run_lt_toto2.sh,
+    not the shared .venv.
+  notes:
+  - Zero-shot pretrained foundation model. fit() is a no-op; no training is performed.
+  - Weights downloaded from HuggingFace (Datadog/Toto-2.0-22m) on first predict().
+  - 'Natively multivariate: joint time/variate attention (unlike lag_llama, which is channel-by-channel).'
+  - Probabilistic quantile head; the 0.5 quantile is used as the point forecast.
+  - MUST run from the Python 3.12 environment .venv-toto2 (toto-models requires >=3.12).
 - model_name: tpatchgnn
   registered: true
   supports_regular_mts: false
@@ -622,18 +634,16 @@ models:
   eligible_m4: false
   adapter_name: irregular
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
-  - 'Manual override: runtime compatibility probe kept tPatchGNN excluded because
-    the regular benchmark tasks do not provide its required irregular patched input
-    format.'
+  - 'Manual override: runtime compatibility probe kept tPatchGNN excluded because the regular benchmark
+    tasks do not provide its required irregular patched input format.'
   review_status: manual_override
   eligibility_source: manual_override
-  eligibility_reason: Runtime probe confirmed tPatchGNN expects irregular patched
-    inputs with explicit observation times and masks, so it remains outside the regular
-    long-term and M4 automated rankings.
+  eligibility_reason: Runtime probe confirmed tPatchGNN expects irregular patched inputs with explicit
+    observation times and masks, so it remains outside the regular long-term and M4 automated rankings.
 - model_name: transformer
   registered: true
   supports_regular_mts: true
@@ -646,8 +656,8 @@ models:
   eligible_m4: true
   adapter_name: seq2seq
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -665,8 +675,8 @@ models:
   eligible_m4: true
   adapter_name: encoder_only
   notes:
-  - Bootstrap capability matrix uses deterministic heuristics and requires manual
-    review before the full benchmark.
+  - Bootstrap capability matrix uses deterministic heuristics and requires manual review before the full
+    benchmark.
   - Config runtime instantiation was not attempted in the static audit.
   - Versioned from the static audit; review before exhaustive benchmarking.
   review_status: bootstrap
@@ -678,9 +688,8 @@ review_required: true
 eligibility_policy:
   eligible_long_term: Controls whether a model enters the automated long-term leaderboard.
   eligible_m4: Controls whether a model enters the automated M4 leaderboard.
-  both_false_behavior: If both flags are false, the model is excluded from the main
-    automated rankings and should appear in the coverage table until it is reviewed
-    or adapted.
+  both_false_behavior: If both flags are false, the model is excluded from the main automated rankings
+    and should appear in the coverage table until it is reviewed or adapted.
   source_precedence:
   - manual_override
   - bootstrap_heuristic
