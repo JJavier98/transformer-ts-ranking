@@ -189,6 +189,28 @@ models:
   eligibility_reason: 'Re-enabled after context-length truncation fix (2026-06-24): engine truncates encoder
     input to 96 steps, reducing ODE memory from ~11 GB to ~150 MB. Context length of 96 is documented
     in the paper.'
+- model_name: contiformer_fast
+  registered: true
+  supports_regular_mts: true
+  supports_univariate: true
+  requires_time_marks: false
+  requires_exogenous: false
+  requires_irregular_times: false
+  requires_spatial_structure: false
+  eligible_long_term: true
+  eligible_m4: true
+  adapter_name: encoder_only
+  review_status: manual_override
+  eligibility_source: manual_override
+  eligibility_reason: Added 2026-10-07. S-TransformerTS variant of ContiFormer (library branch
+    feat/contiformer-ode-checkpoint) with one ODE trajectory per start point instead of one solve per
+    pair of time steps, replayed from CUDA graphs. Same continuous-time model and parameters as
+    contiformer; with identical weights its output differs from contiformer by ~5e-7 (job 178362).
+    Runs at the canonical seq_len=96 and batch_size=16 (no per-model override); ~1.2 s per training
+    step on a V100 versus ~95 s for contiformer, which stays not measured.
+  notes:
+  - 'Not a published model: report it as a library variant of ContiFormer, not as ContiFormer.'
+  - Cost probes in artifacts/review/contiformer_probe_v*.json.
 - model_name: crossformer
   registered: true
   supports_regular_mts: true
