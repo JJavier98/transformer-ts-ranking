@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import contextlib
 import gc
+import socket
 import sys
 import time
 from dataclasses import dataclass, field
@@ -46,6 +47,13 @@ from .wandb_logger import WandbLogger  # noqa: TID252
 def _utc_now_iso() -> str:
     """Return the current UTC time as an ISO-8601 string (microsecond precision)."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def _gpu_name() -> str | None:
+    """Return the name of the current CUDA device, or ``None`` on CPU-only hosts."""
+    if not torch.cuda.is_available():
+        return None
+    return torch.cuda.get_device_name(torch.cuda.current_device())
 
 
 @dataclass
@@ -99,6 +107,12 @@ class RunResult:
     # re-run: keep the row with the latest run_timestamp.
     run_timestamp: str = field(default_factory=lambda: _utc_now_iso())
 
+    # Hardware provenance.  Efficiency metrics (train_time_s,
+    # inference_latency_ms, peak_gpu_mb) are only comparable across rows that
+    # share the same GPU model, so every row records where it was produced.
+    hostname: str = field(default_factory=socket.gethostname)
+    gpu_name: str | None = field(default_factory=_gpu_name)
+
     # Per-epoch log entries (not persisted in parquet; go to JSONL separately)
     epoch_logs: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
@@ -131,6 +145,8 @@ class RunResult:
             "pretrained_weights": self.pretrained_weights,
             "precision": self.precision,
             "run_timestamp": self.run_timestamp,
+            "hostname": self.hostname,
+            "gpu_name": self.gpu_name,
         }
 
 
