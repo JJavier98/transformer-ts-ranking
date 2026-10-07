@@ -85,6 +85,17 @@ _MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
         # Disable probabilistic pinball loss; benchmark uses deterministic MSE.
         "use_pinball_loss": False,
     },
+    "airformer": {
+        # The stochastic block computes exp(logvar) with an unbounded
+        # log-variance.  On weather (inputs up to ~190 sigma after scaling) it
+        # explodes to ~1e8 within 3 training steps and every run ended with NaN
+        # metrics (diagnosis: artifacts/review/airformer_weather_diagnosis.json).
+        # Clamping to +-6 keeps it finite (artifacts/review/airformer_fix_probe*.json)
+        # and is a no-op where the log-variance stays inside the bound (it never
+        # exceeded 3.75 on ETTh1 / exchange_rate / illness).  Applied to every
+        # dataset so the model has a single configuration.
+        "logvar_clamp": 6.0,
+    },
     "earthformer": {
         # Prevent accidental 3D image mode.
         "data_mode": "1d",

@@ -22,6 +22,11 @@
 #   7-10  weather, pathformer (4 cells: OOM / ValueError on V100 at bs=16)
 #   11-13 weather h720, lag_llama_pretrained, seeds 42/123/2026
 #   14-17 weather, pathformer, REPLACEMENT seed 7 (see below)
+#   18-29 weather, airformer, all seeds/horizons, with the log-variance clamp
+#         (the 12 original runs ended with NaN metrics)
+#   30-32 airformer with the clamp on ETTh1 h96, exchange_rate h96 and
+#         illness h24 (seed 42): check that the clamp does not change the
+#         results of cells that already worked
 #
 # Replacement-seed rule (fixed 2026-10-06, before any replacement result was
 # seen).  pathformer diverged numerically on 4 weather cells (h96/s42,
@@ -30,7 +35,9 @@
 # for a given seed and is not a memory problem.  A diverged run is replaced
 # by seed 7; if seed 7 also diverges, by seed 99; if that also diverges, the
 # cell keeps the remaining 2 seeds.  The paper reports every failed run and
-# its replacement.  Only pathformer diverged in the 7 core datasets.
+# its replacement.  CORRECTION (2026-10-07): airformer also diverged on weather,
+# silently (NaN metrics, no exception, so it was counted as a valid run); see
+# configs/benchmark/report_scope.yaml.
 #
 # pathformer tasks (7-10) must run on the A100 node to fit at the canonical
 # batch_size=16, so submit them separately pinned to the dgx2 partition:
@@ -48,7 +55,7 @@
 #SBATCH --job-name fill-core
 #SBATCH --partition dgx2,dgx
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-17
+#SBATCH --array=0-32
 #SBATCH --time=4-00:00:00
 #SBATCH -o /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/fill_core_%A_%a.out
 #SBATCH -e /mnt/homeGPU/JJavierAR/transformer-ts-ranking/logs/fill_core_%A_%a.err
@@ -78,6 +85,21 @@ TASKS=(
     "long_term|weather|7|192|pathformer"
     "long_term|weather|7|336|pathformer"
     "long_term|weather|7|720|pathformer"
+    "long_term|weather|42|96|airformer"
+    "long_term|weather|42|192|airformer"
+    "long_term|weather|42|336|airformer"
+    "long_term|weather|42|720|airformer"
+    "long_term|weather|123|96|airformer"
+    "long_term|weather|123|192|airformer"
+    "long_term|weather|123|336|airformer"
+    "long_term|weather|123|720|airformer"
+    "long_term|weather|2026|96|airformer"
+    "long_term|weather|2026|192|airformer"
+    "long_term|weather|2026|336|airformer"
+    "long_term|weather|2026|720|airformer"
+    "long_term|ETTh1|42|96|airformer"
+    "long_term|exchange_rate|42|96|airformer"
+    "long_term|illness|42|24|airformer"
 )
 
 T=$SLURM_ARRAY_TASK_ID
