@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from ..configuration import load_yaml
@@ -365,11 +366,20 @@ class BenchmarkRunner:
 
         Used to skip combos on job re-entry after a wall-time timeout.
         Error rows are NOT skipped so they can be retried on resubmission.
+        Rows with non-finite metrics (numerical divergence stored by older
+        runs without an error message) are not completed either.
         """
         if not self._parquet_path.exists():
             return set()
         df = pd.read_parquet(self._parquet_path)
-        done = df[df["error"].isna()]
+        metric_cols = [c for c in ("mae", "mse", "rmse", "smape", "mase", "owa") if c in df]
+        finite = np.isfinite(df[metric_cols].astype(float)).any(axis=1)  # M4 rows have NaN mae
+        long_term = df["task"] == "long_term"
+        lt_ok = np.isfinite(df[["mae", "mse", "rmse"]].astype(float)).all(axis=1)
+        m4_ok = np.isfinite(df[["smape", "mase", "owa"]].astype(float)).all(axis=1) \
+            if {"smape", "mase", "owa"} <= set(df.columns) else finite
+        valid = (long_term & lt_ok) | (~long_term & m4_ok)
+        done = df[df["error"].isna() & valid]
         return set(
             zip(
                 done["model_name"],

@@ -150,6 +150,28 @@ class RunResult:
         }
 
 
+def _flag_non_finite(result: "RunResult") -> None:
+    """Record a run whose primary metrics are not finite as failed.
+
+    A training run that diverges to NaN finishes without raising, and used to
+    be stored as a successful run with NaN metrics (every airformer run on
+    weather was recorded this way).  Marking it as an error keeps it out of
+    the completed set, so a resubmission retries it, and out of the rankings.
+
+    Args:
+        result: The run result; ``error`` is set in place when needed.
+    """
+    if result.error is not None:
+        return
+    metrics = (result.mae, result.mse, result.rmse) if result.task == "long_term" \
+        else (result.smape, result.mase, result.owa)
+    if not all(np.isfinite(m) for m in metrics):
+        result.error = (
+            "NonFiniteMetrics: the run finished with NaN/inf metrics "
+            f"(numerical divergence; best_val_loss={result.best_val_loss})"
+        )
+
+
 def _count_parameters(model: Any) -> int:
     """Count trainable parameters of a PyTorch model."""
     return int(sum(p.numel() for p in model.parameters() if p.requires_grad))
@@ -372,6 +394,7 @@ class BenchmarkEngine:
             )
         # Record the precision this run actually executed in (auditability).
         result.precision = self._precision_label(model_name)
+        _flag_non_finite(result)
         # Break any reference cycles in the failed model (optimizer stored on
         # self creates model → optimizer → params → model cycles that CPython's
         # reference counter cannot collect) and release cached CUDA tensors so
@@ -647,6 +670,7 @@ class BenchmarkEngine:
                 error=err_msg,
             )
         result.precision = self._precision_label(model_name)
+        _flag_non_finite(result)
         gc.collect()
         if torch.cuda.is_available() and self.device.startswith("cuda"):
             torch.cuda.empty_cache()
