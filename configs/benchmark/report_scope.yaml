@@ -77,6 +77,13 @@ cell_notes:
       Diverged numerically (NaN gating logits) on h96/s42, h192/s42,
       h336/s2026 and h720/s2026; those runs were replaced by the
       pre-registered seed 7.
+  - model: airformer
+    dataset: weather
+    note: >-
+      All 12 runs (4 horizons x 3 seeds) finished without an exception but with
+      NaN metrics (training diverged to NaN; best validation loss NaN). The
+      benchmark stored them as successful; the report treats non-finite metrics
+      as failed runs. Pending decision: replacement seeds or N/A.
 
 # Display names for tables and figures.
 display_names:

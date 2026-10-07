@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -70,9 +71,27 @@ def load_shards(track_dir: Path) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def is_ok(frame: pd.DataFrame) -> pd.Series:
-    """Boolean mask of successful rows (no error message)."""
+def has_no_error(frame: pd.DataFrame) -> pd.Series:
+    """Boolean mask of rows that raised no exception."""
     return frame["error"].isna() | (frame["error"].astype(str).str.strip() == "")
+
+
+def has_finite_metrics(frame: pd.DataFrame) -> pd.Series:
+    """Boolean mask of rows whose primary metrics are all finite numbers.
+
+    A run can finish without raising and still be numerically dead: if the
+    training diverges to NaN the engine stores NaN metrics with an empty
+    ``error``.  Such rows are not valid results.
+    """
+    lt = frame["task"] == "long_term"
+    finite_lt = np.isfinite(frame[LT_METRICS].astype(float)).all(axis=1)
+    finite_m4 = np.isfinite(frame[M4_METRICS].astype(float)).all(axis=1)
+    return (lt & finite_lt) | (~lt & finite_m4)
+
+
+def is_ok(frame: pd.DataFrame) -> pd.Series:
+    """Boolean mask of valid rows: no exception and finite metrics."""
+    return has_no_error(frame) & has_finite_metrics(frame)
 
 
 def deduplicate(frame: pd.DataFrame) -> pd.DataFrame:
@@ -82,10 +101,13 @@ def deduplicate(frame: pd.DataFrame) -> pd.DataFrame:
         frame: Concatenated shard rows.
 
     Returns:
-        De-duplicated rows with an ``ok`` boolean column.
+        De-duplicated rows with ``ok`` (valid result) and ``diverged``
+        (finished with non-finite metrics) boolean columns.
     """
     out = frame.copy()
     out["ok"] = is_ok(out)
+    # Finished without an exception but with NaN/inf metrics (numerical divergence).
+    out["diverged"] = has_no_error(out) & ~has_finite_metrics(out)
     out["_ts"] = pd.to_datetime(out["run_timestamp"], format="ISO8601", utc=True)
     out = out.sort_values(["ok", "_ts"])  # successful and recent rows last
     out = out.drop_duplicates(subset=RUN_KEY, keep="last").drop(columns="_ts")
@@ -172,7 +194,16 @@ def build_report_data(raw_dir: Path, scope_path: Path) -> ReportData:
     m4_rows = deduplicate(m4_rows) if not m4_rows.empty else m4_rows
 
     for name, rows in (("long_term", lt_rows), ("m4", m4_rows)):
-        if not rows.empty and "precision" in rows:
+        if rows.empty:
+            continue
+        div = rows[rows["diverged"]]
+        if not div.empty:
+            by_model = div.groupby(["model_name", "dataset_name"]).size()
+            warnings.append(
+                f"{name}: {len(div)} runs finished with non-finite metrics (numerical "
+                "divergence) and are treated as failed: "
+                + ", ".join(f"{m}/{d}: {n}" for (m, d), n in by_model.items()) + ".")
+        if "precision" in rows:
             bad = rows.loc[rows["ok"] & (rows["precision"] != "fp32")]
             if not bad.empty:
                 warnings.append(
@@ -234,6 +265,9 @@ def coverage_table(data: ReportData) -> pd.DataFrame:
             cells = sub.groupby(["dataset_name", "horizon"])["seed"].nunique()
             row[f"{label}_cells"] = f"{len(cells)}/{expected}"
             row[f"{label}_runs"] = int(len(sub))
+            row[f"{label}_diverged_runs"] = int((data.lt_rows["diverged"]
+                & (data.lt_rows["model_name"] == model)
+                & data.lt_rows["dataset_name"].isin(datasets)).sum())
             if label == "core":
                 row["core_replacement_seed_runs"] = int((~sub["seed"].isin(protocol)).sum())
                 row["core_min_seeds_per_cell"] = int(cells.min()) if len(cells) else 0

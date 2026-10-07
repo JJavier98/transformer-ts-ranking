@@ -121,9 +121,13 @@ class ReportRunner:
             "inputs": {
                 "long_term_shards": int(data.lt_rows["shard"].nunique()) if len(lt_ok) else 0,
                 "long_term_runs_ok": int(len(lt_ok)),
-                "long_term_runs_error": int((~data.lt_rows["ok"]).sum()),
+                "long_term_runs_error": int((~data.lt_rows["ok"] & ~data.lt_rows["diverged"]).sum()),
+                "long_term_runs_diverged": int(data.lt_rows["diverged"].sum()),
                 "m4_runs_ok": int(data.m4_rows["ok"].sum()) if not data.m4_rows.empty else 0,
-                "m4_runs_error": int((~data.m4_rows["ok"]).sum()) if not data.m4_rows.empty else 0,
+                "m4_runs_error": int((~data.m4_rows["ok"] & ~data.m4_rows["diverged"]).sum())
+                if not data.m4_rows.empty else 0,
+                "m4_runs_diverged": int(data.m4_rows["diverged"].sum())
+                if not data.m4_rows.empty else 0,
                 "gpus": lt_ok["gpu_name"].dropna().value_counts().to_dict()
                 if "gpu_name" in lt_ok else {},
             },

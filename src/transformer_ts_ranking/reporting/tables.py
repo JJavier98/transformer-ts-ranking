@@ -380,15 +380,16 @@ def generate_tables(data: ReportData, tables_dir: Path, csv_dir: Path) -> list[P
 
     # ---- coverage -------------------------------------------------------------
     cov = coverage_table(data)
-    header = [r"Model & Core cells & Core runs & Replacement-seed runs & Suppl. cells & M4 & Status \\"]
+    header = [r"Model & Core cells & Core runs & Diverged runs & Replacement-seed runs & Suppl. cells & M4 & Status \\"]
     body = []
     for _, r in cov.iterrows():
         body.append(" & ".join([_escape(r["display"]), r["core_cells"], str(r["core_runs"]),
+                                str(r["core_diverged_runs"]),
                                 str(r["core_replacement_seed_runs"]), r["supplementary_cells"],
                                 r["m4_cells"], _escape(r["status"].replace("_", " "))]) + r" \\")
     notes = [_escape(f"{m}: {v['reason']}") for m, v in data.excluded.items()]
     _write(cov, csv_dir, "coverage",
-           _latex_table(header, body, "lrrrrrl", "Benchmark coverage per model.",
+           _latex_table(header, body, "lrrrrrrl", "Benchmark coverage per model.",
                         "tab:coverage", notes), tables_dir, written)
 
     # ---- seed variability -----------------------------------------------------

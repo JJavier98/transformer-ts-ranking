@@ -52,6 +52,17 @@ def test_deduplicate_prefers_latest_successful_row():
     assert out.loc["m1", "ok"] and out.loc["m1", "mae"] == 2.0
 
 
+def test_nan_metrics_without_error_are_not_valid_results():
+    """A run that finished with NaN metrics (divergence) is failed, not ok."""
+    rows = pd.DataFrame([
+        _row("m0", "A", 96, 42, np.nan),   # no exception, NaN metrics
+        _row("m0", "A", 96, 123, 1.0),
+    ])
+    out = deduplicate(rows).set_index("seed")
+    assert bool(out.loc[42, "diverged"]) and not bool(out.loc[42, "ok"])
+    assert bool(out.loc[123, "ok"]) and not bool(out.loc[123, "diverged"])
+
+
 def test_aggregate_seeds_mean_std_and_seed_list():
     """Seeds are averaged per cell; the seed list is recorded."""
     rows = pd.DataFrame([_row("m0", "A", 96, s, v) for s, v in ((42, 1.0), (123, 3.0), (7, 2.0))])
