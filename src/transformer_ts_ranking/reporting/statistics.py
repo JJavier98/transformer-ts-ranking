@@ -1,21 +1,30 @@
-"""Statistical tests and Critical Difference (CD) diagram for the paper.
+"""Statistical tests and Critical Difference (CD) diagrams for the paper.
 
-Implements the three-step significance analysis required by any ML benchmark
-paper (Demšar, 2006):
-  1. Friedman test — non-parametric omnibus test: are all models equivalent?
-  2. Nemenyi post-hoc test — pairwise significant differences.
-  3. CD diagram — visual summary of which pairwise differences exceed the
-     critical difference at α=0.05.
+Implements the significance analysis of Demšar (2006) on the seed-averaged
+cells produced by :mod:`.loading`.  A *block* is one (dataset, horizon)
+configuration (or one M4 frequency); models are ranked within each block
+(1 = lowest error, ties share the average rank).
 
-Input:  ``results/raw/results_raw.parquet``
-Output: ``results/stats/friedman_test.json``
-        ``results/stats/nemenyi_matrix.csv``
-        ``results/stats/cd_diagram_data.json``
-        ``paper/figures/cd_diagram_{track}.{png,pdf}``
+1. Friedman test, with the Iman–Davenport F correction and Kendall's W as
+   effect size (W = χ²_F / (N (k − 1)); 0 = no agreement between blocks,
+   1 = identical ranking in every block).
+2. Nemenyi post-hoc test (all pairs) and the critical difference
+   CD = q_α √(k (k + 1) / (6 N)), with q_α the studentised-range quantile
+   divided by √2 — computed exactly for any k (no table look-up).
+3. Wilcoxon signed-rank tests of every model against the best-ranked one,
+   Holm-corrected, with the matched-pairs rank-biserial correlation as effect
+   size (Benavoli et al., 2016 recommend this over Nemenyi for pairwise
+   claims).
+4. Demšar-style CD diagram.
+
+Friedman / Nemenyi need a complete matrix: models without a value in every
+block are left out of the test (never the blocks) and reported as excluded.
 
 References:
   Demšar, J. (2006). Statistical comparisons of classifiers over multiple
-  datasets. JMLR, 7, 1–30.
+  data sets. JMLR 7, 1–30.
+  Benavoli, A., Corani, G., Mangili, F. (2016). Should we really use post-hoc
+  tests based on mean-ranks? JMLR 17, 1–10.
 """
 
 from __future__ import annotations
@@ -32,404 +41,278 @@ from scipy import stats
 
 
 # ---------------------------------------------------------------------------
-# Friedman test
+# Rank matrix
 # ---------------------------------------------------------------------------
 
-def _build_rank_matrix(
-    results: pd.DataFrame,
-    metric: str,
-) -> tuple[pd.DataFrame, dict[str, int]]:
-    """Build a model × dataset-horizon rank matrix for the Friedman test.
-
-    Friedman and Nemenyi require a *complete* matrix.  When a model has not
-    produced a value for every configuration, this drops the **incomplete
-    models (rows)** — never the configurations (columns).  Dropping columns
-    would let a single unfinished model erase whole dataset-horizon configs
-    from the analysis: in the limit, one model that failed everywhere would
-    empty the matrix and make the test impossible.  Dropping rows keeps all
-    configurations and confines the loss to the models that genuinely could
-    not run.
-
-    This filtering is **in-memory only** — nothing is removed from the
-    persisted parquet.  Excluded models are returned so callers report them
-    explicitly; they belong in the paper's coverage table as N/A with a
-    justification, never silently omitted.
+def build_block_matrix(cells: pd.DataFrame, metric: str) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Model × block matrix of a metric, restricted to complete models.
 
     Args:
-        results: Raw results DataFrame.
-        metric: Metric to rank on (lower = better).
+        cells: Seed-aggregated cells with ``model_name``, ``dataset_name``,
+            ``horizon`` and the metric column.
+        metric: Metric to use (lower is better).
 
     Returns:
-        Tuple of (rank matrix with models as rows and dataset-horizon configs
-        as columns, where 1 = best model for that config; mapping of excluded
-        model name -> number of configurations it was missing).
+        ``(values, excluded)``: values with models as rows and
+        ``<dataset>_h<horizon>`` blocks as columns (complete models only),
+        and excluded model -> number of missing blocks.
     """
-    agg = (
-        results
-        .groupby(["model_name", "dataset_name", "horizon"])[metric]
-        .mean()
-        .reset_index()
-    )
-    agg["config"] = agg["dataset_name"] + "_h" + agg["horizon"].astype(str)
-    pivot = agg.pivot(index="model_name", columns="config", values=metric)
-
-    # Identify models with incomplete coverage before dropping anything, so the
-    # exclusion is reportable rather than silent.
-    missing_per_model = pivot.isna().sum(axis=1)
-    excluded = {
-        str(model): int(n_missing)
-        for model, n_missing in missing_per_model.items()
-        if n_missing > 0
-    }
-
-    # Drop incomplete MODELS (rows), preserving every configuration.
-    complete = pivot.dropna(axis=0)
-    # Rank within each config (ascending: lower metric = rank 1)
-    rank_matrix = complete.rank(axis=0, ascending=True)
-    return rank_matrix, excluded
+    frame = cells.copy()
+    frame["block"] = frame["dataset_name"] + "_h" + frame["horizon"].astype(str)
+    pivot = frame.pivot_table(index="model_name", columns="block", values=metric)
+    missing = pivot.isna().sum(axis=1)
+    excluded = {str(m): int(n) for m, n in missing.items() if n > 0}
+    return pivot.dropna(axis=0), excluded
 
 
-def run_friedman_test(
-    results: pd.DataFrame,
-    metric: str = "mae",
-    task: str = "long_term",
-) -> dict[str, Any]:
-    """Run the Friedman test on model ranks across datasets.
+def rank_matrix(values: pd.DataFrame) -> pd.DataFrame:
+    """Rank models within each block (1 = best, ties averaged)."""
+    return values.rank(axis=0, ascending=True, method="average")
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+def critical_difference(n_models: int, n_blocks: int, alpha: float = 0.05) -> float:
+    """Nemenyi critical difference for ``n_models`` over ``n_blocks``.
 
     Args:
-        results: Raw results DataFrame.
-        metric: Metric to rank on.
-        task: ``"long_term"`` or ``"m4"``.
-
-    Returns:
-        Dict with statistic, p-value, degrees of freedom, and mean ranks.
-        Also ``excluded_models`` (model -> number of missing configurations):
-        models left out of the test because their coverage is incomplete.  An
-        empty mapping means every eligible model entered the ranking.
-    """
-    subset = results[results["task"] == task]
-    if subset.empty:
-        return {"error": f"No results for task '{task}'."}
-
-    rank_matrix, excluded = _build_rank_matrix(subset, metric)
-    if excluded:
-        print(
-            f"[friedman:{task}:{metric}] WARNING — {len(excluded)} model(s) "
-            f"excluded for incomplete coverage: {excluded}.  Complete their "
-            f"missing cells and re-run to include them in the ranking."
-        )
-    if rank_matrix.shape[0] < 2 or rank_matrix.shape[1] < 2:
-        return {
-            "error": "Insufficient data for Friedman test (need ≥2 models and ≥2 configs).",
-            "excluded_models": excluded,
-        }
-
-    # scipy.stats.friedmanchisquare expects one array per model (as rows)
-    data = [rank_matrix.loc[m].values for m in rank_matrix.index]
-    stat, p_value = stats.friedmanchisquare(*data)
-
-    mean_ranks = rank_matrix.mean(axis=1).sort_values()
-
-    return {
-        "task": task,
-        "metric": metric,
-        "n_models": int(rank_matrix.shape[0]),
-        "n_datasets": int(rank_matrix.shape[1]),
-        "statistic": float(stat),
-        "p_value": float(p_value),
-        "significant_at_0_05": bool(p_value < 0.05),
-        "mean_ranks": mean_ranks.to_dict(),
-        "excluded_models": excluded,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Nemenyi post-hoc test
-# ---------------------------------------------------------------------------
-
-def run_nemenyi_test(
-    results: pd.DataFrame,
-    metric: str = "mae",
-    task: str = "long_term",
-) -> pd.DataFrame:
-    """Run the Nemenyi post-hoc test on model ranks.
-
-    Args:
-        results: Raw results DataFrame.
-        metric: Metric to rank on.
-        task: Benchmark track.
-
-    Returns:
-        Symmetric DataFrame of Nemenyi p-values (model × model).
-    """
-    subset = results[results["task"] == task]
-    if subset.empty:
-        return pd.DataFrame()
-
-    rank_matrix, _excluded = _build_rank_matrix(subset, metric)
-    if rank_matrix.shape[0] < 2:
-        return pd.DataFrame()
-
-    # scikit-posthocs expects an (n_datasets × n_models) DataFrame
-    data_T = rank_matrix.T  # configs × models
-    p_matrix = sp.posthoc_nemenyi_friedman(data_T)
-    return p_matrix
-
-
-# ---------------------------------------------------------------------------
-# Critical Difference diagram
-# ---------------------------------------------------------------------------
-
-def _critical_difference(n_models: int, n_datasets: int, alpha: float = 0.05) -> float:
-    """Compute the Nemenyi critical difference at a given α level.
-
-    Uses the Studentised range distribution q-value from the look-up
-    table in Demšar (2006) Table 5.  Values beyond k=20 use a linear
-    interpolation of the provided table values.
-
-    Args:
-        n_models: Number of classifiers/models.
-        n_datasets: Number of datasets (problems).
+        n_models: Number of compared models (k).
+        n_blocks: Number of blocks (N).
         alpha: Significance level.
 
     Returns:
-        Critical difference threshold.
+        CD = q_α √(k (k + 1) / (6 N)), q_α = studentised range(1−α; k, ∞) / √2.
     """
-    # q_{α, k} values from Demšar (2006) Table 5 for α=0.05 and α=0.10
-    q_005 = {
-        2: 1.960, 3: 2.343, 4: 2.569, 5: 2.728, 6: 2.850,
-        7: 2.949, 8: 3.031, 9: 3.102, 10: 3.164,
-        15: 3.394, 20: 3.561,
-    }
-    q_010 = {
-        2: 1.645, 3: 2.052, 4: 2.291, 5: 2.459, 6: 2.589,
-        7: 2.693, 8: 2.780, 9: 2.855, 10: 2.920,
-        15: 3.160, 20: 3.331,
-    }
-    table = q_005 if alpha <= 0.05 else q_010
-    keys = sorted(table.keys())
+    q_alpha = stats.studentized_range.ppf(1 - alpha, n_models, np.inf) / np.sqrt(2)
+    return float(q_alpha * np.sqrt(n_models * (n_models + 1) / (6.0 * n_blocks)))
 
-    if n_models in table:
-        q = table[n_models]
-    elif n_models > max(keys):
-        q = table[max(keys)]
-    else:
-        # Linear interpolation
-        lo = max(k for k in keys if k < n_models)
-        hi = min(k for k in keys if k > n_models)
-        q = table[lo] + (table[hi] - table[lo]) * (n_models - lo) / (hi - lo)
 
-    return float(q * np.sqrt(n_models * (n_models + 1) / (6 * n_datasets)))
+def friedman_test(values: pd.DataFrame) -> dict[str, Any]:
+    """Friedman test with Iman–Davenport correction and Kendall's W.
+
+    Args:
+        values: Complete model × block matrix (lower is better).
+
+    Returns:
+        Test summary (statistics, p-values, effect size, mean ranks).
+    """
+    k, n = values.shape
+    ranks = rank_matrix(values)
+    chi2, p_chi2 = stats.friedmanchisquare(*[values.loc[m].to_numpy() for m in values.index])
+    # Iman & Davenport (1980): less conservative F version of the statistic.
+    f_stat = (n - 1) * chi2 / (n * (k - 1) - chi2) if n * (k - 1) != chi2 else np.inf
+    p_f = float(stats.f.sf(f_stat, k - 1, (k - 1) * (n - 1)))
+    kendall_w = chi2 / (n * (k - 1))
+    return {
+        "n_models": int(k),
+        "n_blocks": int(n),
+        "friedman_chi2": float(chi2),
+        "friedman_p": float(p_chi2),
+        "iman_davenport_F": float(f_stat),
+        "iman_davenport_p": p_f,
+        "kendall_W": float(kendall_w),
+        "significant_at_0_05": bool(p_f < 0.05),
+        "mean_ranks": ranks.mean(axis=1).sort_values().to_dict(),
+    }
+
+
+def nemenyi_matrix(values: pd.DataFrame) -> pd.DataFrame:
+    """Pairwise Nemenyi p-values (model × model)."""
+    return sp.posthoc_nemenyi_friedman(values.T.reset_index(drop=True))
+
+
+def wilcoxon_vs_best(values: pd.DataFrame) -> pd.DataFrame:
+    """Wilcoxon signed-rank test of every model against the best-ranked model.
+
+    Args:
+        values: Complete model × block matrix (lower is better).
+
+    Returns:
+        One row per model: mean rank, Holm-adjusted p-value and the
+        matched-pairs rank-biserial correlation r (positive = the model has
+        larger errors than the best model).
+    """
+    mean_ranks = rank_matrix(values).mean(axis=1).sort_values()
+    best = mean_ranks.index[0]
+    rows = []
+    for model in mean_ranks.index[1:]:
+        diff = values.loc[model] - values.loc[best]
+        nonzero = diff[diff != 0]
+        if len(nonzero) == 0:
+            p, r = 1.0, 0.0
+        else:
+            p = float(stats.wilcoxon(nonzero, zero_method="wilcox").pvalue)
+            ranks = stats.rankdata(np.abs(nonzero))
+            r = float((ranks[nonzero > 0].sum() - ranks[nonzero < 0].sum()) / ranks.sum())
+        rows.append({"model": model, "mean_rank": mean_ranks[model], "p_raw": p,
+                     "rank_biserial_r": r})
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return table
+    # Holm step-down correction.
+    order = np.argsort(table["p_raw"].to_numpy())
+    m = len(order)
+    adjusted = np.empty(m)
+    running = 0.0
+    for pos, idx in enumerate(order):
+        running = max(running, min(1.0, (m - pos) * table["p_raw"].iloc[idx]))
+        adjusted[idx] = running
+    table["p_holm"] = adjusted
+    table["significant_at_0_05"] = table["p_holm"] < 0.05
+    table.insert(0, "reference", best)
+    return table
+
+
+# ---------------------------------------------------------------------------
+# CD diagram
+# ---------------------------------------------------------------------------
+
+def _cliques(ranks: list[float], cd: float) -> list[tuple[int, int]]:
+    """Maximal groups of consecutive models whose rank range is below the CD."""
+    n = len(ranks)
+    cliques: list[tuple[int, int]] = []
+    for i in range(n):
+        j = i
+        while j + 1 < n and ranks[j + 1] - ranks[i] < cd:
+            j += 1
+        if j > i and not any(a <= i and j <= b for a, b in cliques):
+            cliques.append((i, j))
+    return cliques
 
 
 def plot_cd_diagram(
     mean_ranks: dict[str, float],
-    n_datasets: int,
-    output_dir: Path,
-    title: str = "CD Diagram",
-    filename_stem: str = "cd_diagram",
+    n_blocks: int,
+    output_stem: Path,
+    title: str,
+    labels: dict[str, str] | None = None,
     alpha: float = 0.05,
 ) -> list[Path]:
-    """Draw a Demšar-style Critical Difference diagram.
-
-    Groups of models whose mean-rank difference is below the CD are connected
-    by a thick horizontal bar (they are NOT statistically significantly
-    different).
+    """Draw a Demšar CD diagram (better half on the left, worse half on the right).
 
     Args:
-        mean_ranks: Dict mapping model names to their mean rank values.
-        n_datasets: Number of datasets used in the Friedman test.
-        output_dir: Output directory.
+        mean_ranks: Model -> mean rank.
+        n_blocks: Number of blocks used for the ranks.
+        output_stem: Output path without extension (``.png`` and ``.pdf``).
         title: Figure title.
-        filename_stem: Base file name without extension.
-        alpha: Significance level for the critical difference.
+        labels: Optional model -> display label.
+        alpha: Significance level of the CD.
 
     Returns:
-        List of generated file paths.
+        Written file paths.
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    if not mean_ranks:
-        return []
+    labels = labels or {}
+    models = sorted(mean_ranks, key=mean_ranks.__getitem__)
+    ranks = [mean_ranks[m] for m in models]
+    k = len(models)
+    cd = critical_difference(k, n_blocks, alpha)
+    half = (k + 1) // 2
+    cliques = _cliques(ranks, cd)
 
-    sorted_models = sorted(mean_ranks, key=mean_ranks.__getitem__)
-    n_models = len(sorted_models)
-    ranks_sorted = [mean_ranks[m] for m in sorted_models]
-    cd = _critical_difference(n_models, n_datasets, alpha=alpha)
-
-    # ---- Layout parameters --------------------------------------------------
-    fig_width = 10
-    fig_height = 0.5 * n_models + 2.5
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    ax.set_xlim(0.5, n_models + 0.5)
-    ax.set_ylim(-0.5, n_models + 1.5)
+    line_h = 0.28
+    height = 1.6 + line_h * max(half, k - half) + 0.18 * len(cliques)
+    fig, ax = plt.subplots(figsize=(10, height))
+    lo, hi = 1, k
+    ax.set_xlim(lo - (hi - lo) * 0.42, hi + (hi - lo) * 0.42)
+    ax.set_ylim(-height + 0.6, 0.9)
     ax.axis("off")
 
-    rank_min, rank_max = 1.0, float(n_models)
-    axis_y = n_models + 0.8
+    # Rank axis with ticks.
+    ax.plot([lo, hi], [0, 0], "k-", lw=1)
+    for tick in range(lo, hi + 1):
+        ax.plot([tick, tick], [0, 0.08], "k-", lw=0.8)
+        ax.text(tick, 0.13, str(tick), ha="center", va="bottom", fontsize=7)
+    # CD bracket.
+    ax.plot([lo, lo + cd], [0.55, 0.55], "k-", lw=1.4)
+    ax.plot([lo, lo], [0.5, 0.6], "k-", lw=1.4)
+    ax.plot([lo + cd, lo + cd], [0.5, 0.6], "k-", lw=1.4)
+    ax.text(lo + cd / 2, 0.62, f"CD = {cd:.2f}", ha="center", va="bottom", fontsize=8)
 
-    # Draw the rank axis
-    ax.annotate(
-        "", xy=(rank_max + 0.1, axis_y), xytext=(rank_min - 0.1, axis_y),
-        arrowprops=dict(arrowstyle="->", color="black", lw=1.5),
-    )
-    for tick in np.arange(rank_min, rank_max + 0.5, 1.0):
-        ax.plot([tick, tick], [axis_y - 0.1, axis_y + 0.1], "k-", lw=1.2)
-        ax.text(tick, axis_y + 0.25, str(int(round(tick))), ha="center",
-                fontsize=9, va="bottom")
-    ax.text(
-        (rank_min + rank_max) / 2, axis_y + 0.6,
-        "← better   Mean rank   worse →",
-        ha="center", fontsize=9, style="italic",
-    )
+    # Clique bars just below the axis.
+    for level, (i, j) in enumerate(cliques):
+        y = -0.12 - 0.12 * level
+        ax.plot([ranks[i] - 0.03, ranks[j] + 0.03], [y, y], "k-", lw=2.5, solid_capstyle="round")
+    base = -0.25 - 0.12 * len(cliques)
 
-    # Draw CD bracket
-    cd_x_start = rank_min
-    cd_x_end = rank_min + cd
-    cd_y = axis_y + 1.2
-    ax.annotate(
-        "", xy=(cd_x_end, cd_y), xytext=(cd_x_start, cd_y),
-        arrowprops=dict(arrowstyle="|-|", color="black", lw=2.0),
-    )
-    ax.text(
-        (cd_x_start + cd_x_end) / 2, cd_y + 0.15,
-        f"CD = {cd:.3f}",
-        ha="center", fontsize=9,
-    )
+    # Model labels with elbow connectors.
+    for idx, (model, rank) in enumerate(zip(models, ranks)):
+        left = idx < half
+        row = idx if left else (k - 1 - idx)
+        y = base - line_h * row
+        x_text = lo - (hi - lo) * 0.05 if left else hi + (hi - lo) * 0.05
+        ax.plot([rank, rank], [0, y], "k-", lw=0.6)
+        ax.plot([rank, x_text], [y, y], "k-", lw=0.6)
+        ax.text(x_text + (-0.05 if left else 0.05), y,
+                f"{labels.get(model, model)} ({rank:.2f})",
+                ha="right" if left else "left", va="center", fontsize=8)
 
-    # Draw model names and connecting lines
-    for i, (model_name, rank) in enumerate(zip(sorted_models, ranks_sorted)):
-        y = n_models - i - 0.5
-        ax.plot([rank, rank], [axis_y, y + 0.4], "k-", lw=0.8, alpha=0.5)
-        ax.plot(rank, axis_y, "ko", markersize=5)
-        ha = "right" if rank <= (rank_min + rank_max) / 2 else "left"
-        x_text = rank - 0.05 if ha == "right" else rank + 0.05
-        ax.text(x_text, y + 0.3, model_name, ha=ha, va="center", fontsize=9)
-
-    # Draw "no significant difference" clique bars
-    _draw_clique_bars(ax, sorted_models, ranks_sorted, cd, axis_y)
-
-    ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
+    ax.set_title(title, fontsize=10)
     fig.tight_layout()
-
-    generated = []
+    paths = []
     for ext in ("png", "pdf"):
-        path = output_dir / f"{filename_stem}.{ext}"
-        fig.savefig(path, dpi=150 if ext == "png" else None, bbox_inches="tight")
-        generated.append(path)
+        path = output_stem.with_suffix(f".{ext}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=200 if ext == "png" else None, bbox_inches="tight")
+        paths.append(path)
     plt.close(fig)
-    return generated
-
-
-def _draw_clique_bars(
-    ax: plt.Axes,
-    sorted_models: list[str],
-    ranks: list[float],
-    cd: float,
-    axis_y: float,
-) -> None:
-    """Draw horizontal bars connecting models not significantly different.
-
-    A clique is a maximal group of consecutive models (by rank) where the
-    range of ranks is below the CD.  Each clique is represented by a thick
-    horizontal bar at a y-position below the rank axis.
-
-    Args:
-        ax: Matplotlib axes.
-        sorted_models: Model names sorted by ascending mean rank.
-        ranks: Corresponding mean ranks.
-        cd: Critical difference threshold.
-        axis_y: Y-coordinate of the rank axis.
-    """
-    n = len(ranks)
-    used = [False] * n
-    bar_level = 0
-
-    for i in range(n):
-        if used[i]:
-            continue
-        # Find the maximal clique starting at i
-        j = i
-        while j + 1 < n and ranks[j + 1] - ranks[i] < cd:
-            j += 1
-        if j > i:
-            # Draw a bar from ranks[i] to ranks[j]
-            bar_y = axis_y - 0.35 - bar_level * 0.25
-            ax.plot([ranks[i], ranks[j]], [bar_y, bar_y], "k-", lw=3.5, alpha=0.75)
-            for k in range(i, j + 1):
-                used[k] = True
-            bar_level += 1
+    return paths
 
 
 # ---------------------------------------------------------------------------
-# Full statistics pipeline
+# Pipeline
 # ---------------------------------------------------------------------------
 
-def run_full_statistics(
-    results: pd.DataFrame,
+def run_statistics(
+    cells: pd.DataFrame,
+    metric: str,
+    name: str,
     stats_dir: Path,
     figures_dir: Path,
+    labels: dict[str, str],
+    title: str,
 ) -> dict[str, Any]:
-    """Run Friedman + Nemenyi tests and generate CD diagrams for both tracks.
+    """Run every test for one (track, metric) and write the artifacts.
+
+    Writes ``results/stats/{name}_friedman.json``, ``{name}_nemenyi.csv``,
+    ``{name}_wilcoxon_vs_best.csv``, ``{name}_cd.json`` and the figure
+    ``paper/figures/cd_{name}.{png,pdf}``.
 
     Args:
-        results: Raw results DataFrame.
-        stats_dir: Output directory for JSON/CSV stat artifacts.
-        figures_dir: Output directory for CD diagram figures.
+        cells: Seed-aggregated cells.
+        metric: Metric column (lower is better).
+        name: Artifact name prefix (e.g. ``long_term_mae``).
+        stats_dir: Output directory for the statistics.
+        figures_dir: Output directory for the CD diagram.
+        labels: Model display labels.
+        title: CD diagram title.
 
     Returns:
-        Dict summarising all test results.
+        The Friedman summary, including excluded models.
     """
     stats_dir.mkdir(parents=True, exist_ok=True)
-    figures_dir.mkdir(parents=True, exist_ok=True)
+    values, excluded = build_block_matrix(cells, metric)
+    if values.shape[0] < 3 or values.shape[1] < 2:
+        summary = {"error": "not enough complete models/blocks", "excluded_models": excluded}
+        (stats_dir / f"{name}_friedman.json").write_text(json.dumps(summary, indent=2))
+        return summary
 
-    summary: dict[str, Any] = {}
+    summary = friedman_test(values)
+    summary.update({"metric": metric, "excluded_models": excluded,
+                    "blocks": list(values.columns)})
+    cd = critical_difference(summary["n_models"], summary["n_blocks"])
+    summary["nemenyi_cd_0_05"] = cd
+    (stats_dir / f"{name}_friedman.json").write_text(json.dumps(summary, indent=2))
 
-    for task, metric in [("long_term", "mae"), ("m4", "owa")]:
-        subset = results[results["task"] == task]
-        if subset.empty:
-            continue
-
-        # 1 — Friedman test
-        friedman = run_friedman_test(results, metric=metric, task=task)
-        summary[f"friedman_{task}"] = friedman
-        (stats_dir / f"friedman_{task}.json").write_text(json.dumps(friedman, indent=2))
-
-        if "error" in friedman:
-            continue
-
-        mean_ranks: dict[str, float] = friedman["mean_ranks"]
-        n_datasets = int(friedman["n_datasets"])
-
-        # 2 — Nemenyi post-hoc
-        nemenyi_df = run_nemenyi_test(results, metric=metric, task=task)
-        if not nemenyi_df.empty:
-            nemenyi_path = stats_dir / f"nemenyi_matrix_{task}.csv"
-            nemenyi_df.to_csv(nemenyi_path)
-            summary[f"nemenyi_{task}"] = str(nemenyi_path)
-
-        # 3 — CD diagram data
-        cd_data: dict[str, Any] = {
-            "task": task,
-            "metric": metric,
-            "n_datasets": n_datasets,
-            "mean_ranks": mean_ranks,
-            "cd_0_05": _critical_difference(len(mean_ranks), n_datasets, alpha=0.05),
-            # Models absent from this diagram because their coverage was
-            # incomplete — recorded so the figure's provenance is auditable.
-            "excluded_models": friedman.get("excluded_models", {}),
-        }
-        (stats_dir / f"cd_diagram_data_{task}.json").write_text(
-            json.dumps(cd_data, indent=2)
-        )
-
-        # 4 — CD diagram figure
-        plot_cd_diagram(
-            mean_ranks=mean_ranks,
-            n_datasets=n_datasets,
-            output_dir=figures_dir,
-            title=f"CD Diagram — {task.replace('_', '-').title()} ({metric.upper()})",
-            filename_stem=f"cd_diagram_{task}",
-            alpha=0.05,
-        )
-
+    nemenyi_matrix(values).set_axis(values.index, axis=0).set_axis(values.index, axis=1) \
+        .to_csv(stats_dir / f"{name}_nemenyi.csv")
+    wilcoxon_vs_best(values).to_csv(stats_dir / f"{name}_wilcoxon_vs_best.csv", index=False)
+    rank_matrix(values).to_csv(stats_dir / f"{name}_ranks_per_block.csv")
+    (stats_dir / f"{name}_cd.json").write_text(json.dumps({
+        "mean_ranks": summary["mean_ranks"], "n_blocks": summary["n_blocks"],
+        "cd_0_05": cd, "excluded_models": excluded,
+    }, indent=2))
+    plot_cd_diagram(summary["mean_ranks"], summary["n_blocks"],
+                    figures_dir / f"cd_{name}", title, labels)
     return summary

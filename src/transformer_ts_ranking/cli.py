@@ -434,12 +434,11 @@ def main(argv: list[str] | None = None) -> int:
 
         cfg = ReportRunnerConfig(repo_root=repo_root)
         runner = ReportRunner(cfg)
-        summary = runner.run()
-        for key, val in summary.items():
-            if isinstance(val, list):
-                print(f"{key}: {len(val)} files")
-            else:
-                print(f"{key}: {val}")
+        manifest = runner.run()
+        for key, files in manifest["outputs"].items():
+            print(f"{key}: {len(files)} files")
+        for warning in manifest["warnings"]:
+            print(f"WARNING: {warning}")
         return 0
 
     parser.error(f"Unsupported command: {args.command}")

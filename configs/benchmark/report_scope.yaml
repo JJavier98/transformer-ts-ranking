@@ -1,0 +1,126 @@
+# Scope and presentation decisions for the paper report.
+#
+# Every decision that changes WHICH results enter a table, figure or test is
+# recorded here (with its date and reason) instead of being hard-coded in the
+# reporting module.  The reporting pipeline reads this file, applies it to the
+# persisted result shards and writes the applied scope into
+# results/report_manifest.json for auditability.
+
+manifest_kind: report_scope
+version: 2026-10-07
+
+long_term:
+  # Main ranking (tables, Friedman/Nemenyi, CD diagram).  Decided 2026-10-05:
+  # electricity and traffic could not be completed by every model within the
+  # cluster wall-time (out of memory or never run), so they are reported in a
+  # supplementary, partial table only.
+  core_datasets: [ETTh1, ETTh2, ETTm1, ETTm2, exchange_rate, illness, weather]
+  supplementary_datasets: [electricity, traffic]
+  horizons:
+    default: [96, 192, 336, 720]
+    illness: [24, 36, 48, 60]
+
+m4:
+  frequencies: [Yearly, Quarterly, Monthly, Weekly, Daily, Hourly]
+  # Number of series per frequency (M4 competition).  Used to weight the
+  # overall sMAPE / MASE exactly as the official M4 evaluation does.
+  n_series:
+    Yearly: 23000
+    Quarterly: 24000
+    Monthly: 48000
+    Weekly: 359
+    Daily: 4227
+    Hourly: 414
+
+seeds:
+  protocol: [42, 123, 2026]
+  # Pre-registered replacement seeds (decided 2026-10-06, before any
+  # replacement result was seen): a run that diverges numerically is replaced
+  # by seed 7, then 99; if both diverge the cell keeps its remaining seeds.
+  replacement_order: [7, 99]
+
+# Models that are part of the library but are NOT in the ranking.
+excluded_models:
+  contiformer:
+    status: not_measured
+    reason: >-
+      Solves one Neural ODE per pair of time steps (T^2 solves x 200 RK4
+      steps). Measured on a V100 at seq_len=96, batch 16: ~95 s per training
+      step, ~57,000 GPU-hours for the core grid; no cell can finish within
+      the 4-day wall-time (artifacts/review/contiformer_probe_v*.json).
+      Represented in the benchmark by its library variant contiformer_fast.
+  tpatchgnn:
+    status: not_applicable
+    reason: >-
+      Requires irregular patched inputs (x_time, x_mask, pred_time) that do
+      not exist in the regular long-term or M4 protocols.
+
+# Models that are S-TransformerTS variants, not published architectures.
+library_variants:
+  contiformer_fast: >-
+    S-TransformerTS variant of ContiFormer: same continuous-time model and
+    parameters, one ODE trajectory per start point instead of one solve per
+    pair of time steps (outputs equal to ContiFormer up to ~5e-7 with
+    identical weights).
+
+# Documented per-cell deviations from the protocol, rendered as footnotes.
+cell_notes:
+  - model: lag_llama_pretrained
+    dataset: weather
+    horizon: 720
+    note: >-
+      Zero-shot and deterministic: the three seeds give identical forecasts
+      (verified on every other cell), so only seed 42 was run (39 h).
+  - model: pathformer
+    dataset: weather
+    note: >-
+      Diverged numerically (NaN gating logits) on h96/s42, h192/s42,
+      h336/s2026 and h720/s2026; those runs were replaced by the
+      pre-registered seed 7.
+
+# Display names for tables and figures.
+display_names:
+  airformer: AirFormer
+  autoformer: Autoformer
+  basisformer: BasisFormer
+  card: CARD
+  cats: CATS
+  chronos_bolt: Chronos-Bolt
+  contiformer: ContiFormer
+  contiformer_fast: ContiFormer-fast$^\dagger$
+  crossformer: Crossformer
+  deformable_tst: DeformableTST
+  earthformer: Earthformer
+  etsformer: ETSformer
+  fedformer: FEDformer
+  informer: Informer
+  itransformer: iTransformer
+  lag_llama_pretrained: Lag-Llama
+  multipatchformer: MultiPatchFormer
+  nonstationary_transformer: NS-Transformer
+  patchtst: PatchTST
+  pathformer: Pathformer
+  pyraformer: Pyraformer
+  quatformer: Quatformer
+  reformer: Reformer
+  scaleformer: Scaleformer
+  spacetimeformer: Spacetimeformer
+  tft: TFT
+  timexer: TimeXer
+  toto2: Toto-2
+  transformer: Transformer
+  triformer: Triformer
+
+# Zero-shot foundation models (marked in tables).
+zero_shot_models: [chronos_bolt, lag_llama_pretrained, toto2]
+
+dataset_display_names:
+  ETTh1: ETTh1
+  ETTh2: ETTh2
+  ETTm1: ETTm1
+  ETTm2: ETTm2
+  exchange_rate: Exchange
+  illness: ILI
+  weather: Weather
+  electricity: Electricity
+  traffic: Traffic

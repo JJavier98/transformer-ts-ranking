@@ -1,72 +1,81 @@
 """Orchestrates the full report generation pipeline.
 
-Reads persisted benchmark artifacts (parquet + JSONL) and writes all
-paper-ready outputs to ``paper/figures/`` and ``paper/tables/``.
+Reads the persisted result shards (``results/raw/<track>/<shard>/``), applies
+the report scope (``configs/benchmark/report_scope.yaml``) and writes:
 
-No model training occurs here; all outputs are derived from the raw
-``results/raw/results_raw.parquet`` and ``results/raw/epoch_logs.jsonl``
-files written by the benchmark runner.
+* ``paper/tables/``        — LaTeX tables,
+* ``paper/figures/``       — PNG + PDF figures,
+* ``results/leaderboards/`` — CSV versions of every table,
+* ``results/stats/``       — Friedman / Nemenyi / Wilcoxon artifacts,
+* ``results/report_manifest.json`` — provenance: inputs, code versions,
+  applied scope, ranked / excluded models, warnings and every output file.
+
+No model is trained or evaluated here (invariant: results are regenerated
+from persisted artifacts only).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+import subprocess
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
-from .convergence import load_epoch_logs, plot_convergence_curves
-from .radar import generate_radar_charts
-from .statistics import run_full_statistics
-from .tables import generate_heatmaps, generate_ranking_tables
+from .figures import generate_figures
+from .loading import build_report_data
+from .statistics import run_statistics
+from .tables import generate_tables
 
 
 @dataclass
 class ReportRunnerConfig:
-    """Configuration for the report generation pipeline.
+    """Paths used by the report pipeline.
 
     Attributes:
         repo_root: Root of the benchmark repository.
-        results_dir: Directory containing ``results_raw.parquet``
-            and ``epoch_logs.jsonl``.
-        figures_dir: Output directory for all figures.
-        tables_dir: Output directory for all tables.
-        stats_dir: Output directory for statistical test artifacts.
-        tasks: Which benchmark tracks to include (``"long_term"`` / ``"m4"``).
+        results_dir: ``results/raw`` (per-track shard directories).
+        scope_path: Report scope YAML.
+        figures_dir: Output directory for figures.
+        tables_dir: Output directory for LaTeX tables.
+        leaderboards_dir: Output directory for CSV tables.
+        stats_dir: Output directory for statistical artifacts.
     """
 
     repo_root: Path
     results_dir: Path | None = None
+    scope_path: Path | None = None
     figures_dir: Path | None = None
     tables_dir: Path | None = None
+    leaderboards_dir: Path | None = None
     stats_dir: Path | None = None
-    tasks: list[str] = field(default_factory=lambda: ["long_term", "m4"])
 
     def __post_init__(self) -> None:
-        self.repo_root = self.repo_root.resolve()
-        if self.results_dir is None:
-            self.results_dir = self.repo_root / "results" / "raw"
-        if self.figures_dir is None:
-            self.figures_dir = self.repo_root / "paper" / "figures"
-        if self.tables_dir is None:
-            self.tables_dir = self.repo_root / "paper" / "tables"
-        if self.stats_dir is None:
-            self.stats_dir = self.repo_root / "results" / "stats"
+        """Fill default paths relative to the repository root."""
+        root = self.repo_root = self.repo_root.resolve()
+        self.results_dir = self.results_dir or root / "results" / "raw"
+        self.scope_path = self.scope_path or root / "configs" / "benchmark" / "report_scope.yaml"
+        self.figures_dir = self.figures_dir or root / "paper" / "figures"
+        self.tables_dir = self.tables_dir or root / "paper" / "tables"
+        self.leaderboards_dir = self.leaderboards_dir or root / "results" / "leaderboards"
+        self.stats_dir = self.stats_dir or root / "results" / "stats"
+
+
+def _git(args: list[str], cwd: Path) -> str:
+    """Return the output of a git command, or ``"unknown"``."""
+    try:
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
+                              check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
 
 
 class ReportRunner:
-    """Regenerates all paper-ready outputs from persisted artifacts.
-
-    Usage::
-
-        cfg = ReportRunnerConfig(repo_root=Path("."))
-        runner = ReportRunner(cfg)
-        summary = runner.run()
-    """
+    """Regenerates all paper-ready outputs from persisted artifacts."""
 
     def __init__(self, config: ReportRunnerConfig) -> None:
-        """Initialise the report runner.
+        """Store the configuration.
 
         Args:
             config: Report generation configuration.
@@ -74,68 +83,65 @@ class ReportRunner:
         self.cfg = config
 
     def run(self) -> dict[str, Any]:
-        """Generate all figures, tables, and statistical tests.
+        """Generate tables, statistics and figures, then write the manifest.
 
         Returns:
-            Dict mapping output category to list of generated file paths.
+            The manifest dictionary.
         """
-        results = self._load_results()
-        if results.empty:
-            print("No benchmark results found. Run the benchmark first.")
-            return {}
+        cfg = self.cfg
+        data = build_report_data(cfg.results_dir, cfg.scope_path)
+        labels = {m: data.display(m).replace("$^\\dagger$", "†") for m in data.ranked_models}
 
-        epoch_logs = self._load_epoch_logs()
-        summary: dict[str, Any] = {}
+        outputs: dict[str, list[str]] = {}
+        print("Tables...")
+        outputs["tables"] = [str(p) for p in generate_tables(data, cfg.tables_dir,
+                                                             cfg.leaderboards_dir)]
+        print("Statistics...")
+        stats_summary = {}
+        for metric in ("mae", "mse"):
+            stats_summary[f"long_term_{metric}"] = run_statistics(
+                data.lt_core, metric, f"long_term_{metric}", cfg.stats_dir, cfg.figures_dir,
+                labels, f"Long-term forecasting — mean rank by {metric.upper()} "
+                        f"(Nemenyi CD, α = 0.05)")
+        if not data.m4_cells.empty:
+            stats_summary["m4_owa"] = run_statistics(
+                data.m4_cells, "owa", "m4_owa", cfg.stats_dir, cfg.figures_dir, labels,
+                "M4 — mean rank by OWA over frequencies (Nemenyi CD, α = 0.05)")
+        print("Figures...")
+        outputs["figures"] = [str(p) for p in generate_figures(data, cfg.results_dir,
+                                                               cfg.figures_dir)]
 
-        # 1 — Convergence curves
-        if not epoch_logs.empty:
-            print("Generating convergence curves...")
-            paths = plot_convergence_curves(epoch_logs, self.cfg.figures_dir / "convergence")
-            summary["convergence"] = [str(p) for p in paths]
-            print(f"  → {len(paths)} files")
-
-        # 2 — Accuracy heatmaps
-        print("Generating accuracy heatmaps...")
-        paths = generate_heatmaps(results, self.cfg.figures_dir)
-        summary["heatmaps"] = [str(p) for p in paths]
-        print(f"  → {len(paths)} files")
-
-        # 3 — Radar charts
-        print("Generating radar charts...")
-        paths = generate_radar_charts(results, self.cfg.figures_dir)
-        summary["radar"] = [str(p) for p in paths]
-        print(f"  → {len(paths)} files")
-
-        # 4 — Ranking tables
-        print("Generating ranking tables...")
-        paths = generate_ranking_tables(results, self.cfg.tables_dir)
-        summary["tables"] = [str(p) for p in paths]
-        print(f"  → {len(paths)} files")
-
-        # 5 — Statistical tests + CD diagrams
-        print("Running statistical tests...")
-        stat_summary = run_full_statistics(
-            results=results,
-            stats_dir=self.cfg.stats_dir,
-            figures_dir=self.cfg.figures_dir,
-        )
-        summary["statistics"] = stat_summary
-        print(f"  → Friedman + Nemenyi + CD diagrams generated")
-
-        return summary
-
-    def _load_results(self) -> pd.DataFrame:
-        """Load the raw results parquet or return an empty DataFrame."""
-        parquet_path = self.cfg.results_dir / "results_raw.parquet"
-        if not parquet_path.exists():
-            return pd.DataFrame()
-        return pd.read_parquet(parquet_path)
-
-    def _load_epoch_logs(self) -> pd.DataFrame:
-        """Load the epoch log JSONL or return an empty DataFrame."""
-        jsonl_path = self.cfg.results_dir / "epoch_logs.jsonl"
-        if not jsonl_path.exists():
-            return pd.DataFrame()
-        return load_epoch_logs(jsonl_path)
-
-
+        lt_ok = data.lt_rows[data.lt_rows["ok"]]
+        manifest = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "repo_commit": _git(["rev-parse", "HEAD"], cfg.repo_root),
+            "repo_dirty": bool(_git(["status", "--porcelain"], cfg.repo_root)),
+            "library_commit": _git(["rev-parse", "HEAD"], cfg.repo_root / "s-transformers-lib"),
+            "scope_version": data.scope.get("version"),
+            "inputs": {
+                "long_term_shards": int(data.lt_rows["shard"].nunique()) if len(lt_ok) else 0,
+                "long_term_runs_ok": int(len(lt_ok)),
+                "long_term_runs_error": int((~data.lt_rows["ok"]).sum()),
+                "m4_runs_ok": int(data.m4_rows["ok"].sum()) if not data.m4_rows.empty else 0,
+                "m4_runs_error": int((~data.m4_rows["ok"]).sum()) if not data.m4_rows.empty else 0,
+                "gpus": lt_ok["gpu_name"].dropna().value_counts().to_dict()
+                if "gpu_name" in lt_ok else {},
+            },
+            "ranked_models": data.ranked_models,
+            "excluded_models": data.excluded,
+            "statistics": {k: {kk: v.get(kk) for kk in (
+                "n_models", "n_blocks", "friedman_chi2", "friedman_p", "iman_davenport_F",
+                "iman_davenport_p", "kendall_W", "nemenyi_cd_0_05", "excluded_models", "error")}
+                for k, v in stats_summary.items()},
+            "warnings": data.warnings,
+            "pending": [
+                "Training time and inference latency are not reported: past runs mixed V100 "
+                "and A100 nodes. They come from the fixed-hardware profiling pass.",
+            ],
+            "outputs": outputs,
+        }
+        path = cfg.repo_root / "results" / "report_manifest.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(manifest, indent=2, default=str))
+        print(f"Manifest → {path}")
+        return manifest
